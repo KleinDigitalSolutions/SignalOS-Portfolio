@@ -639,7 +639,8 @@ a {
 }
 
 .detail-grid,
-.settings-grid {
+.settings-grid,
+.role-brief-meta {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -702,6 +703,38 @@ a {
   margin: 0 0 16px;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.flow-stage-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.flow-stage-card {
+  padding: 16px 18px;
+  border: 1px solid rgba(179, 226, 230, 0.11);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.flow-stage-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.flow-stage-top strong {
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.role-brief-meta {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
 }
 
 .detail-list {

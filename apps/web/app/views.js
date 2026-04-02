@@ -59,6 +59,14 @@ function selectedApproval(appData, uiState) {
   return appData.approvals.find((item) => item.id === uiState.selectedApprovalId) || appData.approvals[0] || null;
 }
 
+function renderTagGroup(values, tone = "neutral") {
+  if (!values || values.length === 0) {
+    return `<span class="pill pill-neutral">Keine Angabe</span>`;
+  }
+
+  return values.map((value) => `<span class="pill pill-${tone}">${escapeHtml(value)}</span>`).join("");
+}
+
 function renderPriorityList(appData) {
   return appData.priorities
     .map(
@@ -118,6 +126,28 @@ function renderEvents(appData) {
       `,
     )
     .join("");
+}
+
+function renderFlowStages(flow) {
+  return `
+    <div class="flow-stage-list">
+      ${flow
+        .map(
+          (stage) => `
+            <article class="flow-stage-card" data-stage-status="${escapeHtml(stage.status)}">
+              <div class="flow-stage-top">
+                <strong>${escapeHtml(stage.label)}</strong>
+                <span class="${chipClass(stage.status === "done" ? "live" : stage.status === "active" ? "review" : "neutral")}">
+                  ${stage.status === "done" ? "erledigt" : stage.status === "active" ? "aktiv" : "wartet"}
+                </span>
+              </div>
+              <p class="copy">${escapeHtml(stage.summary)}</p>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function pendingApprovals(appData) {
@@ -358,13 +388,13 @@ export const views = {
   },
   cases: {
     eyebrow() {
-      return "Case Management";
+      return "Candidate Flow";
     },
     title() {
-      return "Fälle, Entitäten und Entscheidungen";
+      return "Role Briefs, Kandidaten und nächste Aktionen";
     },
     summary() {
-      return "Pflege der operativen Fälle mit klarer Owner-, Status-, Risiko- und Freigabe-Sicht.";
+      return "Vom neuen Role Brief bis zur operativen Shortlist: Fälle anlegen, priorisieren und entlang des Candidate Flows steuern.";
     },
     statusTone() {
       return "review";
@@ -374,15 +404,131 @@ export const views = {
     },
     render(appData, uiState) {
       const activeCase = selectedCase(appData, uiState);
-      const activeCaseDetails = activeCase?.id === appData.focusCase.id ? appData.focusCase : null;
+      const activeCaseDetails = activeCase?.detail || null;
 
       return `
         <section class="view-grid">
+          <section class="panel span-4">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Neuer Role Brief</p>
+                <h3>Neuen Candidate-Flow-Fall anlegen</h3>
+              </div>
+            </div>
+            <form class="editor-form" data-case-create-form>
+              <div class="form-grid">
+                <label class="field">
+                  <span>Rolle</span>
+                  <input name="title" type="text" placeholder="Senior AI Automation Expert" required />
+                </label>
+                <label class="field">
+                  <span>Domäne</span>
+                  <input name="domainLabel" type="text" value="Recruiting Ops" required />
+                </label>
+                <label class="field">
+                  <span>Owner</span>
+                  <input name="ownerName" type="text" placeholder="Hiring Lead" required />
+                </label>
+                <label class="field">
+                  <span>Initialer Fit</span>
+                  <input name="fitScore" type="number" min="0" max="100" value="82" required />
+                </label>
+                <label class="field field-span-2">
+                  <span>Mission des Role Briefs</span>
+                  <textarea name="mission" rows="4" placeholder="Welche Rolle wird besetzt, warum ist sie relevant und welche Wirkung soll sie erzeugen?" required></textarea>
+                </label>
+                <label class="field field-span-2">
+                  <span>Must-haves</span>
+                  <textarea name="mustHaves" rows="4" placeholder="z. B. Agentic Workflows&#10;n8n / Orchestrierung&#10;Sourcing-Automatisierung"></textarea>
+                </label>
+                <label class="field field-span-2">
+                  <span>Nice-to-haves</span>
+                  <textarea name="niceToHaves" rows="3" placeholder="z. B. Clay / Enrichment&#10;Hiring Ops Erfahrung"></textarea>
+                </label>
+                <label class="field">
+                  <span>Standort</span>
+                  <input name="location" type="text" value="Remote / Deutschland" required />
+                </label>
+                <label class="field">
+                  <span>Urgency</span>
+                  <input name="urgency" type="text" value="hoch" required />
+                </label>
+                <label class="field">
+                  <span>Zielstart</span>
+                  <input name="targetStart" type="text" value="innerhalb von 6 Wochen" required />
+                </label>
+                <label class="field">
+                  <span>Risk Flags</span>
+                  <textarea name="riskFlags" rows="3" placeholder="z. B. Zeitkritische Rolle&#10;Sensible Ansprache"></textarea>
+                </label>
+                <label class="field field-span-2">
+                  <span>Outreach-Winkel</span>
+                  <textarea name="outreachAngle" rows="4" placeholder="Welche Value Proposition und welcher Einstieg passen für die erste Ansprache?" required></textarea>
+                </label>
+              </div>
+              <p class="panel-subcopy">Das Anlegen erstellt direkt einen operativen Fall mit Role Brief, Flow-Timeline, Candidate Signals und Audit/Event-Eintrag.</p>
+              <button class="inline-button" type="submit">Case anlegen</button>
+            </form>
+          </section>
+
+          <section class="panel span-8">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Flow Snapshot</p>
+                <h3>${activeCase ? escapeHtml(activeCase.title) : "Kein Fall ausgewählt"}</h3>
+              </div>
+              ${activeCase ? `<span class="${chipClass(activeCase.openApprovals > 0 ? "review" : "live")}">${escapeHtml(activeCase.statusLabel)}</span>` : ""}
+            </div>
+            ${
+              activeCase && activeCaseDetails
+                ? `
+                  <div class="detail-grid">
+                    <article class="detail-card">
+                      <p class="detail-label">Mission</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.roleBrief.mission)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Outreach-Winkel</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.roleBrief.outreachAngle)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Must-haves</p>
+                      <div class="pill-row">${renderTagGroup(activeCaseDetails.roleBrief.mustHaves, "review")}</div>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Nice-to-haves</p>
+                      <div class="pill-row">${renderTagGroup(activeCaseDetails.roleBrief.niceToHaves, "neutral")}</div>
+                    </article>
+                  </div>
+                  <div class="role-brief-meta">
+                    <article class="detail-card">
+                      <p class="detail-label">Standort</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.roleBrief.location)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Urgency</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.roleBrief.urgency)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Zielstart</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.roleBrief.targetStart)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Nächste operative Entscheidung</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.openDecision)}</p>
+                    </article>
+                  </div>
+                  ${renderFlowStages(activeCaseDetails.flow)}
+                `
+                : `<p class="copy">Wähle einen Fall aus oder lege einen neuen Role Brief an, um den Candidate Flow zu sehen.</p>`
+            }
+          </section>
+
           <section class="panel span-7">
             <div class="panel-head">
               <div>
                 <p class="panel-label">Cases</p>
-                <h3>Operative Fälle mit Risiko-, Status- und Owner-Sicht</h3>
+                <h3>Aktive Recruiting-Fälle mit Status- und Freigabe-Sicht</h3>
               </div>
             </div>
             <table class="data-table">
@@ -432,6 +578,10 @@ export const views = {
                 ? `
                   <form class="editor-form" data-case-form="${escapeHtml(activeCase.id)}">
                     <div class="form-grid">
+                      <label class="field field-span-2">
+                        <span>Mission</span>
+                        <textarea name="mission" rows="4">${escapeHtml(activeCaseDetails?.roleBrief?.mission || "")}</textarea>
+                      </label>
                       <label class="field">
                         <span>Titel</span>
                         <input name="title" type="text" value="${escapeHtml(activeCase.title)}" required />
@@ -459,6 +609,30 @@ export const views = {
                         <textarea name="riskFlags" rows="4">${escapeHtml(activeCase.riskFlags.join("\n"))}</textarea>
                       </label>
                       <label class="field field-span-2">
+                        <span>Must-haves</span>
+                        <textarea name="mustHaves" rows="4">${escapeHtml(activeCaseDetails?.roleBrief?.mustHaves?.join("\n") || "")}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Nice-to-haves</span>
+                        <textarea name="niceToHaves" rows="3">${escapeHtml(activeCaseDetails?.roleBrief?.niceToHaves?.join("\n") || "")}</textarea>
+                      </label>
+                      <label class="field">
+                        <span>Standort</span>
+                        <input name="location" type="text" value="${escapeHtml(activeCaseDetails?.roleBrief?.location || "")}" />
+                      </label>
+                      <label class="field">
+                        <span>Urgency</span>
+                        <input name="urgency" type="text" value="${escapeHtml(activeCaseDetails?.roleBrief?.urgency || "")}" />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Zielstart</span>
+                        <input name="targetStart" type="text" value="${escapeHtml(activeCaseDetails?.roleBrief?.targetStart || "")}" />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Outreach-Winkel</span>
+                        <textarea name="outreachAngle" rows="4">${escapeHtml(activeCaseDetails?.roleBrief?.outreachAngle || "")}</textarea>
+                      </label>
+                      <label class="field field-span-2">
                         <span>Zusammenfassung</span>
                         <textarea name="summary" rows="4">${escapeHtml(activeCaseDetails?.summary || "")}</textarea>
                       </label>
@@ -472,7 +646,7 @@ export const views = {
                       </label>
                     </div>
                     <p class="panel-subcopy">
-                      ${activeCaseDetails ? "Fokus-Case-Felder werden mit dem Case zusammen gespeichert." : "Erweiterte Detailfelder greifen aktuell nur, wenn der ausgewählte Case zugleich der Fokus-Case ist."}
+                      Recruiting-spezifische Briefing-, Risiko- und Entscheidungsfelder werden direkt mit dem ausgewählten Candidate-Flow-Fall gespeichert.
                     </p>
                     <button class="inline-button" type="submit">Case speichern</button>
                   </form>
@@ -484,12 +658,12 @@ export const views = {
           <section class="panel span-12">
             <div class="panel-head">
               <div>
-                <p class="panel-label">Case Entities</p>
-                <h3>${activeCaseDetails ? "Fokus-Case mit Entity-Sicht" : "Entity-Sicht für den Fokus-Case"}</h3>
+                <p class="panel-label">Candidate Signals</p>
+                <h3>${activeCase ? `Erste Kandidatensicht für ${escapeHtml(activeCase.title)}` : "Kandidatensicht"}</h3>
               </div>
             </div>
             ${
-              activeCaseDetails
+              activeCaseDetails?.entities?.length
                 ? `
                   <table class="data-table">
                     <thead>
@@ -503,7 +677,7 @@ export const views = {
                       </tr>
                     </thead>
                     <tbody>
-                      ${appData.focusCase.entities
+                      ${activeCaseDetails.entities
                         .map(
                           (entity) => `
                             <tr>
@@ -525,7 +699,7 @@ export const views = {
                 `
                 : `
                   <article class="detail-card">
-                    <p class="copy">Die Entity-Sicht ist aktuell nur für den Fokus-Case modelliert. Basisdaten und Risk Flags des ausgewählten Cases lassen sich oben trotzdem direkt bearbeiten.</p>
+                    <p class="copy">Für diesen Fall sind aktuell noch keine Candidate Signals hinterlegt.</p>
                   </article>
                 `
             }

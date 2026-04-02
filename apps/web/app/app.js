@@ -206,6 +206,43 @@ viewRoot.addEventListener("submit", async (event) => {
   });
 
   try {
+    if (form.matches("[data-case-create-form]")) {
+      const formData = new FormData(form);
+      const response = await fetch("/api/cases", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          title: formData.get("title"),
+          domainLabel: formData.get("domainLabel"),
+          ownerName: formData.get("ownerName"),
+          fitScore: Number(formData.get("fitScore")),
+          riskFlags: parseLineList(String(formData.get("riskFlags") || "")),
+          mission: formData.get("mission"),
+          mustHaves: parseLineList(String(formData.get("mustHaves") || "")),
+          niceToHaves: parseLineList(String(formData.get("niceToHaves") || "")),
+          location: formData.get("location"),
+          urgency: formData.get("urgency"),
+          targetStart: formData.get("targetStart"),
+          outreachAngle: formData.get("outreachAngle"),
+          actor: "Portfolio Operator",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Case konnte nicht angelegt werden (${response.status})`);
+      }
+
+      const payload = await response.json();
+      appState = payload.state;
+      uiState.selectedCaseId = payload.caseId;
+      setNotice("success", "Neuer Candidate-Flow-Fall angelegt.");
+      render();
+      return;
+    }
+
     if (form.matches("[data-case-form]")) {
       const formData = new FormData(form);
       const caseId = form.dataset.caseForm;
@@ -225,6 +262,13 @@ viewRoot.addEventListener("submit", async (event) => {
           summary: formData.get("summary"),
           openDecision: formData.get("openDecision"),
           nextActions: parseLineList(String(formData.get("nextActions") || "")),
+          mission: formData.get("mission"),
+          mustHaves: parseLineList(String(formData.get("mustHaves") || "")),
+          niceToHaves: parseLineList(String(formData.get("niceToHaves") || "")),
+          location: formData.get("location"),
+          urgency: formData.get("urgency"),
+          targetStart: formData.get("targetStart"),
+          outreachAngle: formData.get("outreachAngle"),
           actor: "Portfolio Operator",
         }),
       });

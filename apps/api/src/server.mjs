@@ -38,6 +38,33 @@ const CASE_STATUS_LABELS = {
 const CASE_STATUS_VALUES = new Set(Object.keys(CASE_STATUS_LABELS));
 const APPROVAL_RISK_VALUES = new Set(["warning", "risk", "live"]);
 
+const DEFAULT_FLOW_STAGES = [
+  {
+    id: "intake",
+    label: "Intake",
+    status: "done",
+    summary: "Rollenbrief strukturiert und im System dokumentiert.",
+  },
+  {
+    id: "discovery",
+    label: "Discovery",
+    status: "active",
+    summary: "Kandidatenvorschläge und erste Evidenz werden aufgebaut.",
+  },
+  {
+    id: "outreach",
+    label: "Outreach",
+    status: "pending",
+    summary: "Personalisierte Ansprache folgt nach Review der Shortlist.",
+  },
+  {
+    id: "screening",
+    label: "Screening",
+    status: "pending",
+    summary: "Replies und CV-Signale werden nach erstem Kontakt klassifiziert.",
+  },
+];
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
@@ -205,6 +232,136 @@ function syncFocusCase(store, priority) {
   store.focusCase.domainLabel = priority.domainLabel;
 }
 
+function ensureCaseDetailsStore(store) {
+  if (!Array.isArray(store.caseDetails)) {
+    store.caseDetails = [];
+  }
+
+  if (store.focusCase?.id && !store.caseDetails.some((entry) => entry.caseId === store.focusCase.id)) {
+    store.caseDetails.push({
+      caseId: store.focusCase.id,
+      summary: store.focusCase.summary,
+      openDecision: store.focusCase.openDecision,
+      riskFlags: Array.isArray(store.focusCase.riskFlags) ? [...store.focusCase.riskFlags] : [],
+      nextActions: Array.isArray(store.focusCase.nextActions) ? [...store.focusCase.nextActions] : [],
+      entities: Array.isArray(store.focusCase.entities) ? [...store.focusCase.entities] : [],
+      roleBrief: {
+        mission: store.focusCase.summary,
+        mustHaves: ["Agentic Delivery", "Workflow-Orchestrierung", "Stakeholder-Kommunikation"],
+        niceToHaves: ["Recruiting Ops Erfahrung", "Sourcing-Automatisierung"],
+        location: "Remote / Deutschland",
+        urgency: "hoch",
+        targetStart: "innerhalb von 6 Wochen",
+        outreachAngle: "Strategische Rolle mit hoher Sichtbarkeit und unmittelbarem Hebel auf operative Qualität.",
+      },
+      flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
+    });
+  }
+
+  return store.caseDetails;
+}
+
+function fallbackEntities(title) {
+  return [
+    {
+      id: createId("entity"),
+      displayName: "Kernprofil",
+      roleLabel: title,
+      status: "under_review",
+      fitScore: 88,
+      riskScore: 34,
+      confidence: 0.74,
+      lastSignal: "Must-haves teilweise bestätigt, Enrichment läuft",
+    },
+    {
+      id: createId("entity"),
+      displayName: "Transferprofil",
+      roleLabel: `${title} mit angrenzender Domäne`,
+      status: "queued",
+      fitScore: 79,
+      riskScore: 46,
+      confidence: 0.66,
+      lastSignal: "Gute Projektsignale, aber Seniorität wird geprüft",
+    },
+    {
+      id: createId("entity"),
+      displayName: "Stretch-Profil",
+      roleLabel: `${title} mit Führungsfokus`,
+      status: "queued",
+      fitScore: 72,
+      riskScore: 58,
+      confidence: 0.61,
+      lastSignal: "Hohe Relevanz, benötigt zusätzliche Evidenz",
+    },
+  ];
+}
+
+function ensureCaseDetail(store, caseId, priority) {
+  const caseDetails = ensureCaseDetailsStore(store);
+  let detail = caseDetails.find((entry) => entry.caseId === caseId);
+
+  if (!detail) {
+    detail = {
+      caseId,
+      summary: `${priority.title} befindet sich im operativen Review und wird entlang des Candidate Flows priorisiert.`,
+      openDecision: "Rollenbrief validieren und erste Shortlist für Discovery vorbereiten.",
+      riskFlags: Array.isArray(priority.riskFlags) ? [...priority.riskFlags] : [],
+      nextActions: [
+        "Role Brief finalisieren",
+        "Discovery-Shortlist priorisieren",
+        "Outreach-Winkel für erste Kontakte definieren",
+      ],
+      entities: fallbackEntities(priority.title),
+      roleBrief: {
+        mission: `${priority.title} als priorisierte Rolle im ${priority.domainLabel} sauber strukturieren und in den Flow überführen.`,
+        mustHaves: ["Domänenrelevanz", "Nachweisbare Delivery", "Kommunikationsstärke"],
+        niceToHaves: ["AI-First Arbeitsweise", "Stakeholder-Erfahrung"],
+        location: "Remote / Hybrid",
+        urgency: "mittel",
+        targetStart: "in Abstimmung",
+        outreachAngle: "Hoher Hebel auf Prozessqualität und Geschwindigkeit.",
+      },
+      flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
+    };
+    caseDetails.push(detail);
+  }
+
+  return detail;
+}
+
+function buildCaseDetail(payload, priority) {
+  const mission = requireNonEmptyString(payload.mission, "mission");
+  const mustHaves = sanitizeStringList(payload.mustHaves);
+  const niceToHaves = sanitizeStringList(payload.niceToHaves);
+  const location = requireNonEmptyString(payload.location, "location");
+  const urgency = requireNonEmptyString(payload.urgency, "urgency");
+  const targetStart = requireNonEmptyString(payload.targetStart, "targetStart");
+  const outreachAngle = requireNonEmptyString(payload.outreachAngle, "outreachAngle");
+
+  return {
+    caseId: priority.id,
+    summary: mission,
+    openDecision: "Role Brief prüfen und Discovery für die erste Kandidatenwelle starten.",
+    riskFlags: [...priority.riskFlags],
+    nextActions: [
+      "Shortlist für Discovery bestätigen",
+      "Enrichment-Signale für die ersten Profile prüfen",
+      "Outreach-Winkel vor Versand abstimmen",
+    ],
+    entities: fallbackEntities(priority.title),
+    roleBrief: {
+      mission,
+      mustHaves,
+      niceToHaves,
+      location,
+      urgency,
+      targetStart,
+      outreachAngle,
+    },
+    flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
+  };
+}
+
 function appendUpdateEvent(store, type, title, summary, actor, target) {
   const timestamp = nowTimestamp();
 
@@ -227,6 +384,78 @@ function appendUpdateEvent(store, type, title, summary, actor, target) {
   });
 }
 
+function appendCreateEvent(store, title, summary, actor, target) {
+  const timestamp = nowTimestamp();
+
+  store.events.unshift({
+    id: createId("event"),
+    severity: "info",
+    eventName: "case.created",
+    title,
+    summary,
+    meta: `${timestamp} · ${actor}`,
+  });
+
+  store.audit.unshift({
+    id: createId("audit"),
+    action: "case.created",
+    actor,
+    target,
+    result: "Case angelegt",
+    timestamp,
+  });
+}
+
+function createCase(store, payload) {
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+  const title = requireNonEmptyString(payload.title, "title");
+  const domainLabel = requireNonEmptyString(payload.domainLabel, "domainLabel");
+  const ownerName = requireNonEmptyString(payload.ownerName, "ownerName");
+  const fitScore = requireInteger(payload.fitScore, "fitScore", 0, 100);
+  const riskFlags = sanitizeStringList(payload.riskFlags);
+
+  const priority = {
+    id: createId("case"),
+    title,
+    domainLabel,
+    status: "evaluation_pending",
+    statusLabel: CASE_STATUS_LABELS.evaluation_pending,
+    ownerName,
+    openApprovals: 0,
+    fitScore,
+    riskFlags,
+    updatedAt: nowTimestamp(),
+  };
+
+  store.priorities.unshift(priority);
+  ensureCaseDetailsStore(store).unshift(buildCaseDetail(payload, priority));
+  store.focusCase = {
+    id: priority.id,
+    title: priority.title,
+    domainLabel: priority.domainLabel,
+    statusLabel: "Bewertung ausstehend",
+    summary: payload.mission,
+    openDecision: "Role Brief prüfen und Discovery für die erste Kandidatenwelle starten.",
+    riskFlags,
+    nextActions: [
+      "Shortlist für Discovery bestätigen",
+      "Enrichment-Signale für die ersten Profile prüfen",
+      "Outreach-Winkel vor Versand abstimmen",
+    ],
+    entities: fallbackEntities(priority.title),
+  };
+
+  appendCreateEvent(
+    store,
+    `Neuer Candidate-Flow-Fall: ${priority.title}`,
+    `${actor} hat einen neuen Recruiting-Fall inklusive Role Brief und initialem Flow angelegt.`,
+    actor,
+    priority.title,
+  );
+
+  return priority;
+}
+
 function updateCase(store, caseId, payload) {
   const priority = store.priorities.find((item) => item.id === caseId);
   if (!priority) {
@@ -244,6 +473,7 @@ function updateCase(store, caseId, payload) {
   const nextActions = sanitizeStringList(payload.nextActions);
   const actor = cleanString(payload.actor) || "Portfolio Operator";
   const changedFields = [];
+  const detail = ensureCaseDetail(store, caseId, priority);
 
   const assign = (target, field, nextValue) => {
     const previous = JSON.stringify(target[field]);
@@ -262,15 +492,41 @@ function updateCase(store, caseId, payload) {
   assign(priority, "fitScore", fitScore);
   assign(priority, "riskFlags", riskFlags);
 
+  assign(detail, "summary", summary);
+  assign(detail, "openDecision", openDecision);
+  assign(detail, "riskFlags", riskFlags);
+  assign(detail, "nextActions", nextActions);
+
+  if ("mission" in payload) {
+    assign(detail.roleBrief, "mission", cleanString(payload.mission));
+  }
+  if ("mustHaves" in payload) {
+    assign(detail.roleBrief, "mustHaves", sanitizeStringList(payload.mustHaves));
+  }
+  if ("niceToHaves" in payload) {
+    assign(detail.roleBrief, "niceToHaves", sanitizeStringList(payload.niceToHaves));
+  }
+  if ("location" in payload) {
+    assign(detail.roleBrief, "location", cleanString(payload.location));
+  }
+  if ("urgency" in payload) {
+    assign(detail.roleBrief, "urgency", cleanString(payload.urgency));
+  }
+  if ("targetStart" in payload) {
+    assign(detail.roleBrief, "targetStart", cleanString(payload.targetStart));
+  }
+  if ("outreachAngle" in payload) {
+    assign(detail.roleBrief, "outreachAngle", cleanString(payload.outreachAngle));
+  }
+
   if (store.focusCase?.id === priority.id) {
     assign(store.focusCase, "title", title);
     assign(store.focusCase, "domainLabel", domainLabel);
-    assign(store.focusCase, "summary", summary);
-    assign(store.focusCase, "openDecision", openDecision);
-    assign(store.focusCase, "riskFlags", riskFlags);
-    assign(store.focusCase, "nextActions", nextActions);
-  } else {
-    syncFocusCase(store, priority);
+    assign(store.focusCase, "summary", detail.summary);
+    assign(store.focusCase, "openDecision", detail.openDecision);
+    assign(store.focusCase, "riskFlags", detail.riskFlags);
+    assign(store.focusCase, "nextActions", detail.nextActions);
+    assign(store.focusCase, "entities", detail.entities);
   }
 
   priority.updatedAt = nowTimestamp();
@@ -370,6 +626,34 @@ async function handleApi(request, response, pathname) {
 
   if (method === "GET" && pathname === "/api/settings") {
     sendJson(response, 200, { settings: state.settings, summary: state.summary });
+    return;
+  }
+
+  if (method === "POST" && pathname === "/api/cases") {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const newCase = createCase(store, payload);
+      await writeStore(store);
+      sendJson(response, 201, {
+        ok: true,
+        caseId: newCase.id,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      sendJson(response, error.code === "invalid_field" ? 400 : 500, {
+        error: error.code || "create_failed",
+        field: error.message,
+      });
+    }
     return;
   }
 
