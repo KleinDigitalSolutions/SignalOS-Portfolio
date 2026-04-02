@@ -72,6 +72,8 @@ Wichtig ist dabei die Produktlogik: SignalOS bleibt ein universelles System, des
 - [Datenmodell](./docs/data-model.md)
 - [Ereignis- und Zustandsmodell](./docs/event-model.md)
 - [Informationsarchitektur](./docs/information-architecture.md)
+- [Brand- und Designsystem](./docs/brand-system.md)
+- [Demo-Szenario](./docs/demo-scenario.md)
 - [Sicherheit und Governance](./docs/security-governance.md)
 - [Roadmap](./docs/roadmap.md)
 
@@ -93,6 +95,7 @@ Aktuell entsteht das Fundament:
 - Sicherheits- und Governance-Basis
 - Informationsarchitektur der Produktoberfläche
 - Daten- und Ereignismodell des Systems
+- erste visuelle Produkt- und Showcase-Richtung
 - Roadmap für die nächste Umsetzungsphase
 
 ## Nächste Schritte

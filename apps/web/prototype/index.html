@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SignalOS Command Center</title>
+    <meta
+      name="description"
+      content="SignalOS ist ein AI-gestütztes Operating System für komplexe High-Stakes-Workflows."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <p class="eyebrow">Operating System</p>
+            <h1>SignalOS</h1>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a class="nav-link is-active" href="#command-center">Command Center</a>
+          <a class="nav-link" href="#workflows">Workflows</a>
+          <a class="nav-link" href="#cases">Cases</a>
+          <a class="nav-link" href="#insights">Insights</a>
+          <a class="nav-link" href="#audit">Audit</a>
+          <a class="nav-link" href="#settings">Settings</a>
+        </nav>
+
+        <section class="sidebar-panel">
+          <p class="panel-label">Governance</p>
+          <ul class="sidebar-list">
+            <li>3 Freigaben offen</li>
+            <li>1 Eskalation aktiv</li>
+            <li>0 kritische Policy-Verstöße</li>
+          </ul>
+        </section>
+
+        <section class="sidebar-panel">
+          <p class="panel-label">Systemlage</p>
+          <p class="sidebar-copy">
+            Structured Outputs aktiv, Tool-Zugriffe eingeschränkt, menschliche Freigaben bei High-Impact-Aktionen erzwungen.
+          </p>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="hero" id="command-center">
+          <div class="hero-copy">
+            <p class="eyebrow">Control Tower</p>
+            <h2>Operative Klarheit für sensible Prozessketten</h2>
+            <p class="hero-text">
+              SignalOS verdichtet Intake, Bewertung, Kommunikation, Freigaben und Monitoring in ein steuerbares System. Nicht mehr Tools, sondern bessere Entscheidungen.
+            </p>
+          </div>
+
+          <div class="hero-status">
+            <div class="status-chip status-live">System stabil</div>
+            <div class="status-chip status-review">3 Freigaben fällig</div>
+            <div class="status-chip status-risk">1 Fall eskaliert</div>
+          </div>
+        </header>
+
+        <section class="kpi-grid" aria-label="Kennzahlen">
+          <article class="metric-card">
+            <p class="metric-label">Time-to-First-Action</p>
+            <strong class="metric-value">17 Min.</strong>
+            <span class="metric-delta is-good">-32 % zum Vormonat</span>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">Flow-Abschlussrate</p>
+            <strong class="metric-value">68 %</strong>
+            <span class="metric-delta is-good">+11 Punkte</span>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">Freigaben > 24h</p>
+            <strong class="metric-value">3</strong>
+            <span class="metric-delta is-warn">Handlungsbedarf</span>
+          </article>
+          <article class="metric-card">
+            <p class="metric-label">Risikoquote</p>
+            <strong class="metric-value">12 %</strong>
+            <span class="metric-delta is-good">-4 Punkte</span>
+          </article>
+        </section>
+
+        <section class="layout-grid">
+          <section class="panel panel-priority" id="cases">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Prioritäten</p>
+                <h3>Fälle mit unmittelbarem Handlungsbedarf</h3>
+              </div>
+              <button class="ghost-button" type="button">Alle Cases</button>
+            </div>
+
+            <div class="priority-list" id="priority-list"></div>
+          </section>
+
+          <section class="panel panel-bottlenecks" id="workflows">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Bottlenecks</p>
+                <h3>Staupunkte entlang des Flows</h3>
+              </div>
+            </div>
+            <div class="bottleneck-list" id="bottleneck-list"></div>
+          </section>
+
+          <section class="panel panel-detail">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Case Detail</p>
+                <h3>Senior AI Workflow Architect</h3>
+              </div>
+              <div class="pill-row">
+                <span class="pill pill-neutral">Recruiting Ops</span>
+                <span class="pill pill-review">Freigabe nötig</span>
+              </div>
+            </div>
+
+            <div class="detail-grid">
+              <div class="detail-block">
+                <p class="detail-label">Zusammenfassung</p>
+                <p class="detail-copy">
+                  Strategisch priorisierte Besetzung mit hohem Zeitdruck, mehreren Stakeholdern und starkem Bedarf an kontrollierter Automatisierung im Sourcing- und Bewertungsprozess.
+                </p>
+              </div>
+              <div class="detail-block">
+                <p class="detail-label">Offene Entscheidung</p>
+                <p class="detail-copy">
+                  Das Messaging für zwei hochrelevante Profile ist versandbereit, erfordert aber menschliche Freigabe wegen sensibler Ansprache und erhöhter Außenwirkung.
+                </p>
+              </div>
+              <div class="detail-block">
+                <p class="detail-label">Risiko-Flags</p>
+                <ul class="detail-list">
+                  <li>Unvollständige Evidenz bei Muss-Kriterium „Agentic Delivery“</li>
+                  <li>48-Stunden-SLA für Freigabe droht zu reißen</li>
+                  <li>Ein Profil mit hoher Passung hat widersprüchliche Wechselindikatoren</li>
+                </ul>
+              </div>
+              <div class="detail-block">
+                <p class="detail-label">Empfohlene nächste Schritte</p>
+                <ul class="detail-list">
+                  <li>Freigabe für zwei Nachrichten priorisieren</li>
+                  <li>Override-Regel für unklare Seniorität dokumentieren</li>
+                  <li>Fall nach Freigabe direkt in Koordination überführen</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel panel-stream" id="audit">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Event Stream</p>
+                <h3>Relevante Systemereignisse</h3>
+              </div>
+            </div>
+            <div class="stream-list" id="event-stream"></div>
+          </section>
+
+          <section class="panel panel-actions">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Nächste Aktionen</p>
+                <h3>Was das System jetzt empfiehlt</h3>
+              </div>
+            </div>
+            <div class="action-stack">
+              <article class="action-card">
+                <span class="pill pill-review">Freigabe</span>
+                <h4>Messaging für Profil 02 und 04 prüfen</h4>
+                <p>
+                  Beide Entwürfe sind inhaltlich stark, wurden aber wegen sensibler Ansprache auf Freigabe gesetzt.
+                </p>
+              </article>
+              <article class="action-card">
+                <span class="pill pill-risk">Eskalation</span>
+                <h4>SLA-Verzug im Evaluationsschritt beheben</h4>
+                <p>
+                  Drei Fälle warten länger als 24 Stunden auf menschliche Entscheidung. Risiko für Durchlaufzeit und Experience steigt.
+                </p>
+              </article>
+              <article class="action-card">
+                <span class="pill pill-neutral">Systempflege</span>
+                <h4>Discovery-Regel für doppelte Profilquellen schärfen</h4>
+                <p>
+                  Deduplizierung ist aktiv, aber eine Datenquelle liefert abweichende Signaturen und erzeugt unnötige Prüfung.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel panel-insight" id="insights">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Insights</p>
+                <h3>Operative Trends</h3>
+              </div>
+            </div>
+            <div class="insight-grid">
+              <div class="insight-block">
+                <p class="detail-label">Stärkster Hebel</p>
+                <p class="detail-copy">
+                  Freigabezeiten sind aktuell der größte Bremsfaktor. Discovery und Enrichment laufen stabil, aber manuelle Entscheidungsschritte stauen sich.
+                </p>
+              </div>
+              <div class="insight-block">
+                <p class="detail-label">Governance-Signal</p>
+                <p class="detail-copy">
+                  Keine High-Impact-Aktion wurde ohne Freigabe ausgeführt. Alle sensiblen Ausgaben sind mit Audit-Einträgen und Zustandswechseln verknüpft.
+                </p>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
