@@ -1,0 +1,16 @@
+{
+  "name": "signalos-portfolio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SignalOS portfolio project workspace",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "echo \"Web app scaffold pending\"",
+    "dev:api": "echo \"API scaffold pending\"",
+    "lint": "echo \"Lint setup pending\"",
+    "test": "echo \"Test setup pending\""
+  }
+}
