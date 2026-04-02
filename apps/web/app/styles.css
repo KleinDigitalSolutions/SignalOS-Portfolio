@@ -426,6 +426,13 @@ a {
   gap: 16px;
 }
 
+.outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
 .metric-card {
   padding: 22px 20px;
   border-color: rgba(179, 226, 230, 0.11);
@@ -440,6 +447,11 @@ a {
   font-family: "Avenir Next", "IBM Plex Sans", sans-serif;
   font-size: 2rem;
   letter-spacing: -0.04em;
+}
+
+.metric-value-small {
+  font-size: 1.2rem;
+  line-height: 1.2;
 }
 
 .metric-delta {
@@ -841,6 +853,7 @@ a {
 
   .view-grid,
   .kpi-grid,
+  .outcome-grid,
   .detail-grid,
   .settings-grid,
   .form-grid {

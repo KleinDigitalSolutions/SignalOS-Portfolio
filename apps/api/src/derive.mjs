@@ -113,11 +113,175 @@ function fallbackOutreachDraft(priority, entities) {
   };
 }
 
+function fallbackReplySignal(priority, entities, draft) {
+  const target = entities[0];
+
+  return {
+    id: `reply-${priority.id}`,
+    targetEntityId: target?.id || draft?.targetEntityId || null,
+    targetEntityLabel: target?.displayName || draft?.targetEntityLabel || "Priorisiertes Profil",
+    channel: draft?.channel || "email",
+    status: "awaiting_reply",
+    sentiment: "neutral",
+    receivedAt: "",
+    summary: "Noch keine Rückmeldung erfasst.",
+    evidenceRefs: [],
+    nextStep: "Auf erste Antwort warten und den Eingang anschließend klassifizieren.",
+  };
+}
+
+function fallbackScreening(priority, roleBrief) {
+  return {
+    id: `screening-${priority.id}`,
+    status: "not_started",
+    recommendation: "Noch kein Screening durchgeführt.",
+    confidence: 0,
+    rationale: "Screening startet, sobald eine erste qualifizierte Rückmeldung vorliegt.",
+    evidenceRefs: [],
+    scoreBreakdown: [
+      { criterion: roleBrief?.mustHaves?.[0] || "Agentic Delivery", score: 0, weight: "hoch" },
+      { criterion: roleBrief?.mustHaves?.[1] || "Domänenrelevanz", score: 0, weight: "hoch" },
+      { criterion: "Kommunikation / Reply-Qualität", score: 0, weight: "mittel" },
+    ],
+  };
+}
+
+function deriveOutcomeTracking(priority, detail) {
+  const draft = detail.outreachDraft;
+  const reply = detail.replySignal;
+  const screening = detail.screening;
+
+  const currentStage =
+    screening.status === "qualified"
+      ? "Qualified"
+      : screening.status === "needs_review"
+        ? "Screening Review"
+        : screening.status === "rejected"
+          ? "Rejected"
+          : reply.status === "interested" || reply.status === "received" || reply.status === "needs_follow_up"
+            ? "Screening Active"
+            : draft.status === "pending_approval"
+              ? "Awaiting Approval"
+              : draft.status === "approved"
+                ? "Reply Monitor"
+                : "Drafting";
+
+  const readiness =
+    screening.status === "qualified"
+      ? "Bereit für Scheduling"
+      : screening.status === "needs_review"
+        ? "Human Review nötig"
+        : screening.status === "rejected"
+          ? "Fallback-Kandidat aktivieren"
+          : reply.status === "interested"
+            ? "Screening priorisieren"
+            : draft.status === "pending_approval"
+              ? "Freigabe blockiert Fortschritt"
+              : "Outreach muss weitergeführt werden";
+
+  const responseSignal =
+    reply.status === "interested"
+      ? "Positives Interesse erfasst"
+      : reply.status === "received"
+        ? "Erste Antwort liegt vor"
+        : reply.status === "needs_follow_up"
+          ? "Follow-up erforderlich"
+          : reply.status === "no_response"
+            ? "Keine Antwort im aktuellen Fenster"
+            : "Noch kein Reply";
+
+  const nextMilestone =
+    screening.status === "qualified"
+      ? "Intro / Interview in 24h"
+      : screening.status === "needs_review"
+        ? "Review mit Hiring Lead heute"
+        : reply.status === "no_response"
+          ? "Follow-up in 48h"
+          : draft.status === "pending_approval"
+            ? draft.approvalDue || "Freigabe heute"
+            : reply.status === "awaiting_reply"
+              ? "Reply-Monitoring aktiv"
+              : "Screening abschließen";
+
+  return {
+    currentStage,
+    readiness,
+    responseSignal,
+    nextMilestone,
+    summary:
+      screening.status === "qualified"
+        ? "Der Fall ist operativ bereit für Scheduling oder die nächste Stakeholder-Stufe."
+        : screening.status === "rejected"
+          ? "Der aktuelle Kandidatenpfad ist abgeschlossen; der Wert liegt jetzt in schneller Re-Priorisierung."
+          : draft.status === "pending_approval"
+            ? "Der größte Engpass liegt im Human-in-the-loop-Freigabeschritt."
+            : "Der Fall bewegt sich zwischen Outreach, Reply-Klassifikation und Screening-Entscheidung.",
+    cards: [
+      { label: "Outreach", value: draft.status, tone: draft.status === "approved" ? "live" : draft.status === "pending_approval" ? "review" : "neutral" },
+      { label: "Reply", value: reply.status, tone: reply.status === "interested" || reply.status === "received" ? "live" : reply.status === "no_response" ? "risk" : "review" },
+      { label: "Screening", value: screening.status, tone: screening.status === "qualified" ? "live" : screening.status === "needs_review" ? "risk" : "review" },
+      { label: "Outcome", value: readiness, tone: screening.status === "qualified" ? "live" : screening.status === "rejected" ? "risk" : "review" },
+    ],
+  };
+}
+
 function recommendedActionForCase(store, priority, detail) {
   const draft = detail.outreachDraft;
+  const reply = detail.replySignal;
+  const screening = detail.screening;
   const draftApproval = draft?.approvalId
     ? store.approvals.find((approval) => approval.id === draft.approvalId)
     : null;
+
+  if (screening?.status === "qualified") {
+    return {
+      title: "Qualified Candidate in Scheduling überführen",
+      summary: `Das Screening ist positiv abgeschlossen. Jetzt zählt eine schnelle Übergabe in Interview- oder Intro-Koordination.`,
+      owner: priority.ownerName,
+      tone: "live",
+      cta: "Scheduling starten",
+    };
+  }
+
+  if (screening?.status === "needs_review") {
+    return {
+      title: "Screening mit Hiring Lead reviewen",
+      summary: `Es liegen Signale vor, aber die Empfehlung ist noch nicht belastbar genug für den nächsten Schritt ohne menschliche Einordnung.`,
+      owner: priority.ownerName,
+      tone: "risk",
+      cta: "Review priorisieren",
+    };
+  }
+
+  if (screening?.status === "rejected") {
+    return {
+      title: "Fallback-Kandidat aktivieren",
+      summary: `Der aktuelle Kandidatenpfad ist beendet. Momentum bleibt nur erhalten, wenn Discovery oder Alternativprofile jetzt nachziehen.`,
+      owner: priority.ownerName,
+      tone: "review",
+      cta: "Alternativen priorisieren",
+    };
+  }
+
+  if (reply?.status === "interested" || reply?.status === "received" || reply?.status === "needs_follow_up") {
+    return {
+      title: "Reply screenen und Empfehlung festhalten",
+      summary: `Für ${reply.targetEntityLabel} liegt eine Rückmeldung vor. Der operative Hebel ist jetzt eine saubere Screening-Entscheidung mit Evidenz.`,
+      owner: priority.ownerName,
+      tone: "review",
+      cta: "Screening abschließen",
+    };
+  }
+
+  if (reply?.status === "no_response") {
+    return {
+      title: "Follow-up planen oder Kandidatenpfad wechseln",
+      summary: `Die aktuelle Ansprache an ${reply.targetEntityLabel} bleibt ohne Antwort. Das System sollte jetzt Timing oder Zielprofil nachschärfen.`,
+      owner: priority.ownerName,
+      tone: "risk",
+      cta: "Follow-up entscheiden",
+    };
+  }
 
   if (draftApproval?.status === "pending" || draft?.status === "pending_approval") {
     return {
@@ -131,11 +295,11 @@ function recommendedActionForCase(store, priority, detail) {
 
   if (draftApproval?.status === "approved" || draft?.status === "approved") {
     return {
-      title: "Outreach auslösen und Reply-Tracking starten",
-      summary: `Die Ansprache an ${draft.targetEntityLabel} ist freigegeben. Jetzt zählt schneller Versand mit sauberem Monitoring der ersten Replies.`,
+      title: "Reply monitoren und Eingang klassifizieren",
+      summary: `Die Ansprache an ${draft.targetEntityLabel} ist freigegeben. Der nächste Hebel ist jetzt sauberes Reply-Monitoring statt weiteres Drafting.`,
       owner: priority.ownerName,
       tone: "live",
-      cta: "Versand koordinieren",
+      cta: "Reply verfolgen",
     };
   }
 
@@ -163,44 +327,57 @@ function detailForCase(store, priority) {
 
   if (detail) {
     const entities = detail.entities?.length ? detail.entities : fallbackEntities(priority);
+    const roleBrief = detail.roleBrief || fallbackRoleBrief(priority);
     const draft = detail.outreachDraft || fallbackOutreachDraft(priority, entities);
+    const replySignal = detail.replySignal || fallbackReplySignal(priority, entities, draft);
+    const screening = detail.screening || fallbackScreening(priority, roleBrief);
     const detailPayload = {
       summary: detail.summary,
       openDecision: detail.openDecision,
       riskFlags: detail.riskFlags || priority.riskFlags,
       nextActions: detail.nextActions || [],
       entities,
-      roleBrief: detail.roleBrief || fallbackRoleBrief(priority),
+      roleBrief,
       flow: detail.flow || fallbackFlow(),
       outreachDraft: draft,
+      replySignal,
+      screening,
     };
 
     return {
       ...detailPayload,
       recommendedAction: recommendedActionForCase(store, priority, detailPayload),
+      outcomeTracking: deriveOutcomeTracking(priority, detailPayload),
     };
   }
 
   if (store.focusCase?.id === priority.id) {
     const entities = store.focusCase.entities || fallbackEntities(priority);
+    const roleBrief = fallbackRoleBrief(priority);
+    const draft = fallbackOutreachDraft(priority, entities);
     const detailPayload = {
       summary: store.focusCase.summary,
       openDecision: store.focusCase.openDecision,
       riskFlags: store.focusCase.riskFlags || priority.riskFlags,
       nextActions: store.focusCase.nextActions || [],
       entities,
-      roleBrief: fallbackRoleBrief(priority),
+      roleBrief,
       flow: fallbackFlow(),
-      outreachDraft: fallbackOutreachDraft(priority, entities),
+      outreachDraft: draft,
+      replySignal: fallbackReplySignal(priority, entities, draft),
+      screening: fallbackScreening(priority, roleBrief),
     };
 
     return {
       ...detailPayload,
       recommendedAction: recommendedActionForCase(store, priority, detailPayload),
+      outcomeTracking: deriveOutcomeTracking(priority, detailPayload),
     };
   }
 
   const entities = fallbackEntities(priority);
+  const roleBrief = fallbackRoleBrief(priority);
+  const draft = fallbackOutreachDraft(priority, entities);
   const detailPayload = {
     summary: `${priority.title} befindet sich im Candidate Flow und wartet auf die nächste priorisierte operative Entscheidung.`,
     openDecision: "Role Brief validieren und Discovery für die erste Kandidatenwelle starten.",
@@ -211,14 +388,17 @@ function detailForCase(store, priority) {
       "Outreach-Winkel abstimmen",
     ],
     entities,
-    roleBrief: fallbackRoleBrief(priority),
+    roleBrief,
     flow: fallbackFlow(),
-    outreachDraft: fallbackOutreachDraft(priority, entities),
+    outreachDraft: draft,
+    replySignal: fallbackReplySignal(priority, entities, draft),
+    screening: fallbackScreening(priority, roleBrief),
   };
 
   return {
     ...detailPayload,
     recommendedAction: recommendedActionForCase(store, priority, detailPayload),
+    outcomeTracking: deriveOutcomeTracking(priority, detailPayload),
   };
 }
 

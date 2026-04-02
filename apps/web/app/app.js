@@ -317,6 +317,73 @@ viewRoot.addEventListener("submit", async (event) => {
       return;
     }
 
+    if (form.matches("[data-reply-form]")) {
+      const formData = new FormData(form);
+      const caseId = form.dataset.replyForm;
+      const response = await fetch(`/api/cases/${caseId}/reply`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          status: formData.get("status"),
+          sentiment: formData.get("sentiment"),
+          channel: formData.get("channel"),
+          receivedAt: formData.get("receivedAt"),
+          summary: formData.get("summary"),
+          evidenceRefs: parseLineList(String(formData.get("evidenceRefs") || "")),
+          nextStep: formData.get("nextStep"),
+          actor: "Portfolio Operator",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Reply-Signal konnte nicht gespeichert werden (${response.status})`);
+      }
+
+      const payload = await response.json();
+      appState = payload.state;
+      uiState.selectedCaseId = caseId;
+      setNotice("success", "Reply-Signal gespeichert.");
+      render();
+      return;
+    }
+
+    if (form.matches("[data-screening-form]")) {
+      const formData = new FormData(form);
+      const caseId = form.dataset.screeningForm;
+      const response = await fetch(`/api/cases/${caseId}/screening`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          status: formData.get("status"),
+          recommendation: formData.get("recommendation"),
+          confidence: Number(formData.get("confidence")),
+          rationale: formData.get("rationale"),
+          evidenceRefs: parseLineList(String(formData.get("evidenceRefs") || "")),
+          deliveryScore: Number(formData.get("deliveryScore")),
+          domainScore: Number(formData.get("domainScore")),
+          communicationScore: Number(formData.get("communicationScore")),
+          actor: "Portfolio Operator",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Screening konnte nicht gespeichert werden (${response.status})`);
+      }
+
+      const payload = await response.json();
+      appState = payload.state;
+      uiState.selectedCaseId = caseId;
+      setNotice("success", "Screening gespeichert.");
+      render();
+      return;
+    }
+
     if (form.matches("[data-case-form]")) {
       const formData = new FormData(form);
       const caseId = form.dataset.caseForm;

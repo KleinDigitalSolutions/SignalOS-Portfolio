@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, extname, join, normalize, relative, resolve } from "node:path";
 
 import { deriveState } from "./derive.mjs";
@@ -37,6 +37,9 @@ const CASE_STATUS_LABELS = {
 
 const CASE_STATUS_VALUES = new Set(Object.keys(CASE_STATUS_LABELS));
 const APPROVAL_RISK_VALUES = new Set(["warning", "risk", "live"]);
+const REPLY_STATUS_VALUES = new Set(["awaiting_reply", "received", "interested", "needs_follow_up", "no_response"]);
+const REPLY_SENTIMENT_VALUES = new Set(["positive", "neutral", "mixed", "negative"]);
+const SCREENING_STATUS_VALUES = new Set(["not_started", "in_review", "qualified", "needs_review", "rejected"]);
 
 const DEFAULT_FLOW_STAGES = [
   {
@@ -241,6 +244,13 @@ function appendApprovalDecision(store, approval, decision, actor) {
         detail.riskFlags = removeFlag(detail.riskFlags, "Outreach-Draft überarbeiten");
         relatedPriority.riskFlags = removeFlag(relatedPriority.riskFlags, "Outreach wartet auf Freigabe");
         relatedPriority.riskFlags = removeFlag(relatedPriority.riskFlags, "Outreach-Draft überarbeiten");
+        detail.replySignal.status = "awaiting_reply";
+        detail.replySignal.channel = detail.outreachDraft.channel;
+        detail.replySignal.targetEntityId = detail.outreachDraft.targetEntityId;
+        detail.replySignal.targetEntityLabel = detail.outreachDraft.targetEntityLabel;
+        detail.replySignal.summary = "Outreach freigegeben. System wartet auf erste Rückmeldung.";
+        detail.replySignal.nextStep = "Eingehende Antwort klassifizieren und anschließend screenen.";
+        detail.replySignal.lastUpdatedAt = approval.decidedAt;
         updateFlowStage(detail.flow, "outreach", "active", "Outreach ist freigegeben und bereit für die Ausführung.");
         updateFlowStage(detail.flow, "screening", "pending", "Reply-Klassifizierung startet nach dem Versand.");
       } else {
@@ -319,6 +329,10 @@ function ensureCaseDetailsStore(store) {
       },
       flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
       outreachDraft: buildDefaultOutreachDraft(store.focusCase.title, entities[0]),
+      replySignal: buildDefaultReplySignal(entities[0], null),
+      screening: buildDefaultScreening({
+        mustHaves: ["Agentic Delivery", "Workflow-Orchestrierung", "Stakeholder-Kommunikation"],
+      }),
     });
   }
 
@@ -382,6 +396,39 @@ function buildDefaultOutreachDraft(title, entity) {
   };
 }
 
+function buildDefaultReplySignal(entity, draft) {
+  return {
+    id: createId("reply"),
+    targetEntityId: entity?.id || draft?.targetEntityId || null,
+    targetEntityLabel: entity?.displayName || draft?.targetEntityLabel || "Priorisiertes Profil",
+    channel: draft?.channel || "email",
+    status: "awaiting_reply",
+    sentiment: "neutral",
+    receivedAt: "",
+    summary: "Noch keine Rückmeldung erfasst.",
+    evidenceRefs: [],
+    nextStep: "Nach Versand auf erste Antwort warten und bei Eingang klassifizieren.",
+    lastUpdatedAt: nowTimestamp(),
+  };
+}
+
+function buildDefaultScreening(roleBrief) {
+  return {
+    id: createId("screening"),
+    status: "not_started",
+    recommendation: "Noch kein Screening durchgeführt.",
+    confidence: 0,
+    rationale: "Screening startet, sobald eine erste qualifizierte Rückmeldung vorliegt.",
+    evidenceRefs: [],
+    scoreBreakdown: [
+      { criterion: roleBrief?.mustHaves?.[0] || "Agentic Delivery", score: 0, weight: "hoch" },
+      { criterion: roleBrief?.mustHaves?.[1] || "Domänenrelevanz", score: 0, weight: "hoch" },
+      { criterion: "Kommunikation / Reply-Qualität", score: 0, weight: "mittel" },
+    ],
+    lastUpdatedAt: nowTimestamp(),
+  };
+}
+
 function updateFlowStage(flow, stageId, status, summary) {
   if (!Array.isArray(flow)) {
     return;
@@ -427,6 +474,10 @@ function ensureCaseDetail(store, caseId, priority) {
       },
       flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
       outreachDraft: buildDefaultOutreachDraft(priority.title, entities[0]),
+      replySignal: buildDefaultReplySignal(entities[0], null),
+      screening: buildDefaultScreening({
+        mustHaves: ["Domänenrelevanz", "Nachweisbare Delivery", "Kommunikationsstärke"],
+      }),
     };
     caseDetails.push(detail);
   }
@@ -453,6 +504,14 @@ function ensureCaseDetail(store, caseId, priority) {
 
   if (!detail.outreachDraft) {
     detail.outreachDraft = buildDefaultOutreachDraft(priority.title, detail.entities[0]);
+  }
+
+  if (!detail.replySignal) {
+    detail.replySignal = buildDefaultReplySignal(detail.entities[0], detail.outreachDraft);
+  }
+
+  if (!detail.screening) {
+    detail.screening = buildDefaultScreening(detail.roleBrief);
   }
 
   return detail;
@@ -490,6 +549,8 @@ function buildCaseDetail(payload, priority) {
     },
     flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
     outreachDraft: buildDefaultOutreachDraft(priority.title, entities[0]),
+    replySignal: buildDefaultReplySignal(entities[0], null),
+    screening: buildDefaultScreening({ mustHaves }),
   };
 }
 
@@ -752,6 +813,196 @@ function requestOutreachApproval(store, caseId, payload) {
 
   appendOutreachApprovalRequested(store, approval, actor);
   return approval;
+}
+
+function updateReplySignal(store, caseId, payload) {
+  const priority = store.priorities.find((item) => item.id === caseId);
+  if (!priority) {
+    return null;
+  }
+
+  const detail = ensureCaseDetail(store, caseId, priority);
+  const reply = detail.replySignal;
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+  const changedFields = [];
+
+  const assign = (field, nextValue) => {
+    const previous = JSON.stringify(reply[field]);
+    const next = JSON.stringify(nextValue);
+    if (previous !== next) {
+      reply[field] = nextValue;
+      changedFields.push(field);
+    }
+  };
+
+  assign("status", requireEnum(payload.status, REPLY_STATUS_VALUES, "status"));
+  assign("sentiment", requireEnum(payload.sentiment, REPLY_SENTIMENT_VALUES, "sentiment"));
+  assign("channel", requireNonEmptyString(payload.channel, "channel"));
+  assign("summary", requireNonEmptyString(payload.summary, "summary"));
+  assign("nextStep", requireNonEmptyString(payload.nextStep, "nextStep"));
+  assign("evidenceRefs", sanitizeStringList(payload.evidenceRefs));
+  assign("receivedAt", cleanString(payload.receivedAt));
+
+  if (changedFields.length > 0) {
+    reply.lastUpdatedAt = nowTimestamp();
+    priority.updatedAt = reply.lastUpdatedAt;
+
+    const targetEntity = detail.entities.find(
+      (entity) => entity.id === reply.targetEntityId || entity.displayName === reply.targetEntityLabel,
+    );
+    if (targetEntity) {
+      targetEntity.lastSignal = reply.summary;
+      targetEntity.status =
+        reply.status === "interested"
+          ? "responded"
+          : reply.status === "no_response"
+            ? "stalled"
+            : reply.status === "received"
+              ? "reply_received"
+              : targetEntity.status;
+    }
+
+    if (reply.status === "interested" || reply.status === "received" || reply.status === "needs_follow_up") {
+      detail.openDecision = "Reply screenen und eine belastbare Empfehlung dokumentieren.";
+      detail.nextActions = [
+        "Reply klassifizieren",
+        "Screening-Rationale dokumentieren",
+        "Nächsten Recruiting-Schritt festlegen",
+      ];
+      detail.riskFlags = removeFlag(detail.riskFlags, "Reply bleibt aus");
+      priority.riskFlags = removeFlag(priority.riskFlags, "Reply bleibt aus");
+      updateFlowStage(detail.flow, "outreach", "done", "Outreach wurde ausgelöst und hat eine erste Rückmeldung erzeugt.");
+      updateFlowStage(detail.flow, "screening", "active", "Reply liegt vor und wird nun im Screening bewertet.");
+    } else if (reply.status === "no_response") {
+      detail.openDecision = "Follow-up planen oder alternative Profile in den Vordergrund ziehen.";
+      detail.nextActions = [
+        "Follow-up-Fenster definieren",
+        "Alternative Kandidaten priorisieren",
+        "Timing der Ansprache überprüfen",
+      ];
+      detail.riskFlags = ensureFlag(detail.riskFlags, "Reply bleibt aus");
+      priority.riskFlags = ensureFlag(priority.riskFlags, "Reply bleibt aus");
+      updateFlowStage(detail.flow, "outreach", "active", "Die Ansprache ist versendet, aber bislang ohne Antwort.");
+    } else {
+      detail.openDecision = "Outreach monitoren und auf erste qualifizierte Rückmeldung warten.";
+      detail.nextActions = [
+        "Reply-Eingang monitoren",
+        "Bei Bedarf Follow-up vorbereiten",
+        "Screening-Logik bereithalten",
+      ];
+      updateFlowStage(detail.flow, "outreach", "active", "Outreach ist live und wird auf erste Rückmeldungen überwacht.");
+      updateFlowStage(detail.flow, "screening", "pending", "Screening startet nach Eingang einer ersten Rückmeldung.");
+    }
+
+    appendUpdateEvent(
+      store,
+      "reply",
+      `Reply-Signal aktualisiert: ${priority.title}`,
+      `${actor} hat ${changedFields.join(", ")} für das Reply-Signal von "${priority.title}" aktualisiert.`,
+      actor,
+      priority.title,
+    );
+  }
+
+  return reply;
+}
+
+function updateScreening(store, caseId, payload) {
+  const priority = store.priorities.find((item) => item.id === caseId);
+  if (!priority) {
+    return null;
+  }
+
+  const detail = ensureCaseDetail(store, caseId, priority);
+  const screening = detail.screening;
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+  const changedFields = [];
+
+  const deliveryScore = requireInteger(payload.deliveryScore, "deliveryScore", 0, 4);
+  const domainScore = requireInteger(payload.domainScore, "domainScore", 0, 4);
+  const communicationScore = requireInteger(payload.communicationScore, "communicationScore", 0, 4);
+
+  const assign = (field, nextValue) => {
+    const previous = JSON.stringify(screening[field]);
+    const next = JSON.stringify(nextValue);
+    if (previous !== next) {
+      screening[field] = nextValue;
+      changedFields.push(field);
+    }
+  };
+
+  assign("status", requireEnum(payload.status, SCREENING_STATUS_VALUES, "status"));
+  assign("recommendation", requireNonEmptyString(payload.recommendation, "recommendation"));
+  assign("confidence", requireInteger(payload.confidence, "confidence", 0, 100));
+  assign("rationale", requireNonEmptyString(payload.rationale, "rationale"));
+  assign("evidenceRefs", sanitizeStringList(payload.evidenceRefs));
+  assign("scoreBreakdown", [
+    { criterion: detail.roleBrief.mustHaves[0] || "Agentic Delivery", score: deliveryScore, weight: "hoch" },
+    { criterion: detail.roleBrief.mustHaves[1] || "Domänenrelevanz", score: domainScore, weight: "hoch" },
+    { criterion: "Kommunikation / Reply-Qualität", score: communicationScore, weight: "mittel" },
+  ]);
+
+  if (changedFields.length > 0) {
+    screening.lastUpdatedAt = nowTimestamp();
+    priority.updatedAt = screening.lastUpdatedAt;
+
+    if (screening.status === "qualified") {
+      detail.openDecision = "Qualified Candidate in Scheduling oder Intro-Loop überführen.";
+      detail.nextActions = [
+        "Intro oder Interview koordinieren",
+        "Stakeholder auf qualifiziertes Profil ausrichten",
+        "Nächsten Touchpoint innerhalb von 24h auslösen",
+      ];
+      detail.riskFlags = removeFlag(detail.riskFlags, "Screening braucht Review");
+      priority.riskFlags = removeFlag(priority.riskFlags, "Screening braucht Review");
+      updateFlowStage(detail.flow, "screening", "done", "Screening ist abgeschlossen und das Profil ist für die nächste Stufe qualifiziert.");
+      priority.status = "coordination_ready";
+      priority.statusLabel = CASE_STATUS_LABELS.coordination_ready;
+    } else if (screening.status === "needs_review") {
+      detail.openDecision = "Human review priorisieren, bevor der Kandidat weitergeführt oder abgelehnt wird.";
+      detail.nextActions = [
+        "Review mit Hiring Lead einplanen",
+        "Kritische Evidenz prüfen",
+        "Entscheidung sauber dokumentieren",
+      ];
+      detail.riskFlags = ensureFlag(detail.riskFlags, "Screening braucht Review");
+      priority.riskFlags = ensureFlag(priority.riskFlags, "Screening braucht Review");
+      updateFlowStage(detail.flow, "screening", "active", "Screening weist offene Punkte auf und braucht menschliche Einordnung.");
+      priority.status = "evaluation_pending";
+      priority.statusLabel = CASE_STATUS_LABELS.evaluation_pending;
+    } else if (screening.status === "rejected") {
+      detail.openDecision = "Fallback-Kandidaten priorisieren und Discovery für den nächsten Fit beschleunigen.";
+      detail.nextActions = [
+        "Alternative Profile aktivieren",
+        "Ablehnungsgrund dokumentieren",
+        "Discovery-Queue neu priorisieren",
+      ];
+      detail.riskFlags = removeFlag(detail.riskFlags, "Screening braucht Review");
+      priority.riskFlags = removeFlag(priority.riskFlags, "Screening braucht Review");
+      updateFlowStage(detail.flow, "screening", "done", "Screening wurde abgeschlossen, aber das Profil wird nicht weitergeführt.");
+      priority.status = "evaluation_pending";
+      priority.statusLabel = CASE_STATUS_LABELS.evaluation_pending;
+    } else {
+      detail.openDecision = "Screening-Rationale schärfen und eine belastbare Empfehlung festhalten.";
+      detail.nextActions = [
+        "Scoring vervollständigen",
+        "Rationale mit Evidenz absichern",
+        "Empfehlung dokumentieren",
+      ];
+      updateFlowStage(detail.flow, "screening", "active", "Screening ist in Arbeit und verdichtet Reply-Signale in eine Empfehlung.");
+    }
+
+    appendUpdateEvent(
+      store,
+      "screening",
+      `Screening aktualisiert: ${priority.title}`,
+      `${actor} hat ${changedFields.join(", ")} für das Screening von "${priority.title}" aktualisiert.`,
+      actor,
+      priority.title,
+    );
+  }
+
+  return screening;
 }
 
 function updateCase(store, caseId, payload) {
@@ -1111,6 +1362,76 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
+  const replyMatch = pathname.match(/^\/api\/cases\/([^/]+)\/reply$/);
+  if (method === "PATCH" && replyMatch) {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const updatedReply = updateReplySignal(store, replyMatch[1], payload);
+      if (!updatedReply) {
+        sendJson(response, 404, {
+          error: "case_not_found",
+        });
+        return;
+      }
+
+      await writeStore(store);
+      sendJson(response, 200, {
+        ok: true,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      sendJson(response, error.code === "invalid_field" ? 400 : 500, {
+        error: error.code || "reply_update_failed",
+        field: error.message,
+      });
+    }
+    return;
+  }
+
+  const screeningMatch = pathname.match(/^\/api\/cases\/([^/]+)\/screening$/);
+  if (method === "PATCH" && screeningMatch) {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const updatedScreening = updateScreening(store, screeningMatch[1], payload);
+      if (!updatedScreening) {
+        sendJson(response, 404, {
+          error: "case_not_found",
+        });
+        return;
+      }
+
+      await writeStore(store);
+      sendJson(response, 200, {
+        ok: true,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      sendJson(response, error.code === "invalid_field" ? 400 : 500, {
+        error: error.code || "screening_update_failed",
+        field: error.message,
+      });
+    }
+    return;
+  }
+
   const approvalEditMatch = pathname.match(/^\/api\/approvals\/([^/]+)$/);
   if (method === "PATCH" && approvalEditMatch) {
     let payload;
@@ -1150,34 +1471,51 @@ async function handleApi(request, response, pathname) {
   sendJson(response, 404, { error: "not_found" });
 }
 
-const server = createServer(async (request, response) => {
-  try {
-    const url = new URL(request.url || "/", `http://${HOST}:${PORT}`);
-    const pathname = url.pathname;
+export {
+  appendApprovalDecision,
+  createCase,
+  ensureCaseDetail,
+  requestOutreachApproval,
+  updateApproval,
+  updateCase,
+  updateOutreachDraft,
+  updateReplySignal,
+  updateScreening,
+};
 
-    if (pathname.startsWith("/api/")) {
-      await handleApi(request, response, pathname);
-      return;
+const isDirectRun =
+  Boolean(process.argv[1]) && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
+
+if (isDirectRun) {
+  const server = createServer(async (request, response) => {
+    try {
+      const url = new URL(request.url || "/", `http://${HOST}:${PORT}`);
+      const pathname = url.pathname;
+
+      if (pathname.startsWith("/api/")) {
+        await handleApi(request, response, pathname);
+        return;
+      }
+
+      const filePath = resolveStaticPath(pathname);
+      if (!filePath) {
+        sendText(response, 403, "Forbidden");
+        return;
+      }
+
+      const extension = extname(filePath).toLowerCase();
+      const file = await readFile(filePath);
+      response.writeHead(200, {
+        "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
+        "Cache-Control": "no-store",
+      });
+      response.end(file);
+    } catch {
+      sendText(response, 404, "Not found");
     }
+  });
 
-    const filePath = resolveStaticPath(pathname);
-    if (!filePath) {
-      sendText(response, 403, "Forbidden");
-      return;
-    }
-
-    const extension = extname(filePath).toLowerCase();
-    const file = await readFile(filePath);
-    response.writeHead(200, {
-      "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
-      "Cache-Control": "no-store",
-    });
-    response.end(file);
-  } catch {
-    sendText(response, 404, "Not found");
-  }
-});
-
-server.listen(PORT, HOST, () => {
-  console.log(`SignalOS app and API available at http://${HOST}:${PORT}`);
-});
+  server.listen(PORT, HOST, () => {
+    console.log(`SignalOS app and API available at http://${HOST}:${PORT}`);
+  });
+}

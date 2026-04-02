@@ -13,6 +13,29 @@ const APPROVAL_RISK_OPTIONS = [
   { value: "live", label: "Live" },
 ];
 
+const REPLY_STATUS_OPTIONS = [
+  { value: "awaiting_reply", label: "Wartet auf Reply" },
+  { value: "received", label: "Reply eingegangen" },
+  { value: "interested", label: "Interesse signalisiert" },
+  { value: "needs_follow_up", label: "Follow-up nötig" },
+  { value: "no_response", label: "Keine Antwort" },
+];
+
+const REPLY_SENTIMENT_OPTIONS = [
+  { value: "positive", label: "Positiv" },
+  { value: "neutral", label: "Neutral" },
+  { value: "mixed", label: "Gemischt" },
+  { value: "negative", label: "Negativ" },
+];
+
+const SCREENING_STATUS_OPTIONS = [
+  { value: "not_started", label: "Nicht gestartet" },
+  { value: "in_review", label: "In Review" },
+  { value: "qualified", label: "Qualified" },
+  { value: "needs_review", label: "Braucht Review" },
+  { value: "rejected", label: "Abgelehnt" },
+];
+
 function renderUpdatedAt(value) {
   if (/^(vor|heute|gestern|morgen)\b/i.test(value) || /^\d{4}-\d{2}-\d{2}/.test(value)) {
     return `Aktualisiert ${escapeHtml(value)}`;
@@ -167,6 +190,28 @@ function renderRecommendedAction(action) {
       <p class="copy">${escapeHtml(action.summary)}</p>
       <p class="copy">Owner: ${escapeHtml(action.owner)}</p>
     </article>
+  `;
+}
+
+function renderOutcomeTracking(outcome) {
+  if (!outcome) {
+    return `<article class="detail-card"><p class="copy">Kein Outcome-Tracking verfügbar.</p></article>`;
+  }
+
+  return `
+    <div class="outcome-grid">
+      ${outcome.cards
+        .map(
+          (card) => `
+            <article class="metric-card">
+              <p class="metric-label">${escapeHtml(card.label)}</p>
+              <strong class="metric-value metric-value-small">${escapeHtml(card.value)}</strong>
+              <span class="${chipClass(card.tone)}">${escapeHtml(card.tone === "live" ? "stabil" : card.tone === "risk" ? "kritisch" : "aktiv")}</span>
+            </article>
+          `,
+        )
+        .join("")}
+    </div>
   `;
 }
 
@@ -661,6 +706,172 @@ export const views = {
                   </article>
                 `
                 : ""
+            }
+          </section>
+
+          <section class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Reply Signal</p>
+                <h3>${activeCase ? `Rückmeldung für ${escapeHtml(activeCase.title)}` : "Kein Fall ausgewählt"}</h3>
+              </div>
+              ${
+                activeCaseDetails?.replySignal
+                  ? `<span class="${chipClass(
+                      activeCaseDetails.replySignal.status === "interested"
+                        ? "live"
+                        : activeCaseDetails.replySignal.status === "no_response"
+                          ? "risk"
+                          : "review",
+                    )}">${escapeHtml(activeCaseDetails.replySignal.status)}</span>`
+                  : ""
+              }
+            </div>
+            ${
+              activeCase && activeCaseDetails?.replySignal
+                ? `
+                  <form class="editor-form" data-reply-form="${escapeHtml(activeCase.id)}">
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Status</span>
+                        <select name="status">
+                          ${renderSelectOptions(REPLY_STATUS_OPTIONS, activeCaseDetails.replySignal.status)}
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Sentiment</span>
+                        <select name="sentiment">
+                          ${renderSelectOptions(REPLY_SENTIMENT_OPTIONS, activeCaseDetails.replySignal.sentiment)}
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Kanal</span>
+                        <input name="channel" type="text" value="${escapeHtml(activeCaseDetails.replySignal.channel)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Received At</span>
+                        <input name="receivedAt" type="text" value="${escapeHtml(activeCaseDetails.replySignal.receivedAt || "")}" placeholder="z. B. heute, 11:20 Uhr" />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Reply Summary</span>
+                        <textarea name="summary" rows="4" required>${escapeHtml(activeCaseDetails.replySignal.summary)}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Evidenz / Signale</span>
+                        <textarea name="evidenceRefs" rows="4">${escapeHtml(activeCaseDetails.replySignal.evidenceRefs?.join("\n") || "")}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Nächster Schritt</span>
+                        <textarea name="nextStep" rows="4" required>${escapeHtml(activeCaseDetails.replySignal.nextStep)}</textarea>
+                      </label>
+                    </div>
+                    <button class="inline-button" type="submit">Reply speichern</button>
+                  </form>
+                `
+                : `<p class="copy">Für den ausgewählten Fall ist noch kein Reply-Signal vorhanden.</p>`
+            }
+          </section>
+
+          <section class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Screening</p>
+                <h3>${activeCase ? `Empfehlung für ${escapeHtml(activeCase.title)}` : "Kein Fall ausgewählt"}</h3>
+              </div>
+              ${
+                activeCaseDetails?.screening
+                  ? `<span class="${chipClass(
+                      activeCaseDetails.screening.status === "qualified"
+                        ? "live"
+                        : activeCaseDetails.screening.status === "needs_review" || activeCaseDetails.screening.status === "rejected"
+                          ? "risk"
+                          : "review",
+                    )}">${escapeHtml(activeCaseDetails.screening.status)}</span>`
+                  : ""
+              }
+            </div>
+            ${
+              activeCase && activeCaseDetails?.screening
+                ? `
+                  <form class="editor-form" data-screening-form="${escapeHtml(activeCase.id)}">
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Status</span>
+                        <select name="status">
+                          ${renderSelectOptions(SCREENING_STATUS_OPTIONS, activeCaseDetails.screening.status)}
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>Confidence %</span>
+                        <input name="confidence" type="number" min="0" max="100" value="${escapeHtml(String(activeCaseDetails.screening.confidence ?? 0))}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Empfehlung</span>
+                        <input name="recommendation" type="text" value="${escapeHtml(activeCaseDetails.screening.recommendation)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Delivery Score (0-4)</span>
+                        <input name="deliveryScore" type="number" min="0" max="4" value="${escapeHtml(String(activeCaseDetails.screening.scoreBreakdown?.[0]?.score ?? 0))}" required />
+                      </label>
+                      <label class="field">
+                        <span>Domain Score (0-4)</span>
+                        <input name="domainScore" type="number" min="0" max="4" value="${escapeHtml(String(activeCaseDetails.screening.scoreBreakdown?.[1]?.score ?? 0))}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Communication Score (0-4)</span>
+                        <input name="communicationScore" type="number" min="0" max="4" value="${escapeHtml(String(activeCaseDetails.screening.scoreBreakdown?.[2]?.score ?? 0))}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Rationale</span>
+                        <textarea name="rationale" rows="4" required>${escapeHtml(activeCaseDetails.screening.rationale)}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Evidenz-Referenzen</span>
+                        <textarea name="evidenceRefs" rows="4">${escapeHtml(activeCaseDetails.screening.evidenceRefs?.join("\n") || "")}</textarea>
+                      </label>
+                    </div>
+                    <button class="inline-button" type="submit">Screening speichern</button>
+                  </form>
+                `
+                : `<p class="copy">Für den ausgewählten Fall ist noch kein Screening geladen.</p>`
+            }
+          </section>
+
+          <section class="panel span-12">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Outcome Tracking</p>
+                <h3>Durchsatz, Readiness und nächster Meilenstein</h3>
+              </div>
+            </div>
+            ${
+              activeCaseDetails?.outcomeTracking
+                ? `
+                  ${renderOutcomeTracking(activeCaseDetails.outcomeTracking)}
+                  <div class="detail-grid">
+                    <article class="detail-card">
+                      <p class="detail-label">Aktuelle Stage</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.outcomeTracking.currentStage)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Readiness</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.outcomeTracking.readiness)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Response Signal</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.outcomeTracking.responseSignal)}</p>
+                    </article>
+                    <article class="detail-card">
+                      <p class="detail-label">Nächster Meilenstein</p>
+                      <p class="copy">${escapeHtml(activeCaseDetails.outcomeTracking.nextMilestone)}</p>
+                    </article>
+                  </div>
+                  <article class="detail-card">
+                    <p class="detail-label">System Summary</p>
+                    <p class="copy">${escapeHtml(activeCaseDetails.outcomeTracking.summary)}</p>
+                  </article>
+                `
+                : `<p class="copy">Outcome-Tracking wird sichtbar, sobald der Fall durch Outreach, Reply und Screening läuft.</p>`
             }
           </section>
 
