@@ -28,6 +28,16 @@ const MIME_TYPES = {
   ".webp": "image/webp",
 };
 
+const CASE_STATUS_LABELS = {
+  approval_required: "Freigabe erforderlich",
+  escalated: "Eskaliert",
+  evaluation_pending: "Bewertung ausstehend",
+  coordination_ready: "Bereit für Koordination",
+};
+
+const CASE_STATUS_VALUES = new Set(Object.keys(CASE_STATUS_LABELS));
+const APPROVAL_RISK_VALUES = new Set(["warning", "risk", "live"]);
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
@@ -42,6 +52,57 @@ function sendText(response, statusCode, payload) {
     "Cache-Control": "no-store",
   });
   response.end(payload);
+}
+
+function cleanString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function sanitizeStringList(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => cleanString(entry)).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n|,/)
+      .map((entry) => cleanString(entry))
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function requireNonEmptyString(value, field) {
+  const cleaned = cleanString(value);
+  if (!cleaned) {
+    const error = new Error(field);
+    error.code = "invalid_field";
+    throw error;
+  }
+
+  return cleaned;
+}
+
+function requireInteger(value, field, min, max) {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < min || numeric > max) {
+    const error = new Error(field);
+    error.code = "invalid_field";
+    throw error;
+  }
+
+  return numeric;
+}
+
+function requireEnum(value, allowedValues, field) {
+  if (!allowedValues.has(value)) {
+    const error = new Error(field);
+    error.code = "invalid_field";
+    throw error;
+  }
+
+  return value;
 }
 
 function resolveStaticPath(pathname) {
@@ -128,11 +189,153 @@ function appendApprovalDecision(store, approval, decision, actor) {
 
   const relatedPriority = store.priorities.find((priority) => priority.id === approval.caseId);
   if (relatedPriority) {
-    relatedPriority.updatedAt = `aktualisiert ${approval.decidedAt}`;
+    relatedPriority.updatedAt = approval.decidedAt;
     if (decision === "approved") {
       relatedPriority.riskFlags = relatedPriority.riskFlags.filter((flag) => flag !== "SLA droht zu reißen");
     }
   }
+}
+
+function syncFocusCase(store, priority) {
+  if (!store.focusCase || store.focusCase.id !== priority.id) {
+    return;
+  }
+
+  store.focusCase.title = priority.title;
+  store.focusCase.domainLabel = priority.domainLabel;
+}
+
+function appendUpdateEvent(store, type, title, summary, actor, target) {
+  const timestamp = nowTimestamp();
+
+  store.events.unshift({
+    id: createId("event"),
+    severity: "info",
+    eventName: `${type}.updated`,
+    title,
+    summary,
+    meta: `${timestamp} · ${actor}`,
+  });
+
+  store.audit.unshift({
+    id: createId("audit"),
+    action: `${type}.updated`,
+    actor,
+    target,
+    result: "Änderung gespeichert",
+    timestamp,
+  });
+}
+
+function updateCase(store, caseId, payload) {
+  const priority = store.priorities.find((item) => item.id === caseId);
+  if (!priority) {
+    return null;
+  }
+
+  const title = requireNonEmptyString(payload.title, "title");
+  const domainLabel = requireNonEmptyString(payload.domainLabel, "domainLabel");
+  const ownerName = requireNonEmptyString(payload.ownerName, "ownerName");
+  const status = requireEnum(payload.status, CASE_STATUS_VALUES, "status");
+  const fitScore = requireInteger(payload.fitScore, "fitScore", 0, 100);
+  const riskFlags = sanitizeStringList(payload.riskFlags);
+  const summary = cleanString(payload.summary);
+  const openDecision = cleanString(payload.openDecision);
+  const nextActions = sanitizeStringList(payload.nextActions);
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+  const changedFields = [];
+
+  const assign = (target, field, nextValue) => {
+    const previous = JSON.stringify(target[field]);
+    const next = JSON.stringify(nextValue);
+    if (previous !== next) {
+      target[field] = nextValue;
+      changedFields.push(field);
+    }
+  };
+
+  assign(priority, "title", title);
+  assign(priority, "domainLabel", domainLabel);
+  assign(priority, "ownerName", ownerName);
+  assign(priority, "status", status);
+  assign(priority, "statusLabel", CASE_STATUS_LABELS[status]);
+  assign(priority, "fitScore", fitScore);
+  assign(priority, "riskFlags", riskFlags);
+
+  if (store.focusCase?.id === priority.id) {
+    assign(store.focusCase, "title", title);
+    assign(store.focusCase, "domainLabel", domainLabel);
+    assign(store.focusCase, "summary", summary);
+    assign(store.focusCase, "openDecision", openDecision);
+    assign(store.focusCase, "riskFlags", riskFlags);
+    assign(store.focusCase, "nextActions", nextActions);
+  } else {
+    syncFocusCase(store, priority);
+  }
+
+  priority.updatedAt = nowTimestamp();
+  const uniqueChangedFields = [...new Set(changedFields)];
+
+  if (uniqueChangedFields.length > 0) {
+    appendUpdateEvent(
+      store,
+      "case",
+      `Case aktualisiert: ${priority.title}`,
+      `${actor} hat ${uniqueChangedFields.join(", ")} für "${priority.title}" aktualisiert.`,
+      actor,
+      priority.title,
+    );
+  }
+
+  return priority;
+}
+
+function updateApproval(store, approvalId, payload) {
+  const approval = store.approvals.find((item) => item.id === approvalId);
+  if (!approval) {
+    return null;
+  }
+
+  const title = requireNonEmptyString(payload.title, "title");
+  const owner = requireNonEmptyString(payload.owner, "owner");
+  const reason = requireNonEmptyString(payload.reason, "reason");
+  const due = requireNonEmptyString(payload.due, "due");
+  const risk = requireEnum(payload.risk, APPROVAL_RISK_VALUES, "risk");
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+  const changedFields = [];
+
+  const assign = (field, nextValue) => {
+    const previous = JSON.stringify(approval[field]);
+    const next = JSON.stringify(nextValue);
+    if (previous !== next) {
+      approval[field] = nextValue;
+      changedFields.push(field);
+    }
+  };
+
+  assign("title", title);
+  assign("owner", owner);
+  assign("reason", reason);
+  assign("due", due);
+  assign("risk", risk);
+
+  if (changedFields.length > 0) {
+    appendUpdateEvent(
+      store,
+      "approval",
+      `Freigabe aktualisiert: ${approval.title}`,
+      `${actor} hat ${changedFields.join(", ")} für "${approval.title}" angepasst.`,
+      actor,
+      approval.title,
+    );
+
+    const relatedPriority = store.priorities.find((priority) => priority.id === approval.caseId);
+    if (relatedPriority) {
+      relatedPriority.updatedAt = nowTimestamp();
+    }
+  }
+
+  return approval;
 }
 
 async function handleApi(request, response, pathname) {
@@ -214,6 +417,78 @@ async function handleApi(request, response, pathname) {
       decision,
       state: deriveState(store),
     });
+    return;
+  }
+
+  const caseMatch = pathname.match(/^\/api\/cases\/([^/]+)$/);
+  if (method === "PATCH" && caseMatch) {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const updatedCase = updateCase(store, caseMatch[1], payload);
+      if (!updatedCase) {
+        sendJson(response, 404, {
+          error: "case_not_found",
+        });
+        return;
+      }
+
+      await writeStore(store);
+      sendJson(response, 200, {
+        ok: true,
+        caseId: updatedCase.id,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      sendJson(response, error.code === "invalid_field" ? 400 : 500, {
+        error: error.code || "update_failed",
+        field: error.message,
+      });
+    }
+    return;
+  }
+
+  const approvalEditMatch = pathname.match(/^\/api\/approvals\/([^/]+)$/);
+  if (method === "PATCH" && approvalEditMatch) {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const updatedApproval = updateApproval(store, approvalEditMatch[1], payload);
+      if (!updatedApproval) {
+        sendJson(response, 404, {
+          error: "approval_not_found",
+        });
+        return;
+      }
+
+      await writeStore(store);
+      sendJson(response, 200, {
+        ok: true,
+        approvalId: updatedApproval.id,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      sendJson(response, error.code === "invalid_field" ? 400 : 500, {
+        error: error.code || "update_failed",
+        field: error.message,
+      });
+    }
     return;
   }
 

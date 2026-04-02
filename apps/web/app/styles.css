@@ -190,6 +190,12 @@ a {
   cursor: pointer;
 }
 
+.inline-button:disabled,
+.ghost-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
 .inline-button-danger {
   border-color: rgba(255, 125, 111, 0.3);
   color: #ffb0a7;
@@ -346,6 +352,27 @@ a {
   padding: 22px;
 }
 
+.view-notice {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.view-notice p {
+  margin: 0;
+}
+
+.view-notice-success {
+  border-color: rgba(118, 211, 168, 0.3);
+  background: rgba(118, 211, 168, 0.1);
+}
+
+.view-notice-error {
+  border-color: rgba(255, 125, 111, 0.34);
+  background: rgba(255, 125, 111, 0.1);
+}
+
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -382,6 +409,15 @@ a {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+}
+
+.is-selected-card,
+.is-selected-row td {
+  background: rgba(110, 231, 219, 0.07);
+}
+
+.is-selected-card {
+  border-color: rgba(110, 231, 219, 0.3);
 }
 
 .priority-item,
@@ -485,6 +521,62 @@ a {
   padding: 18px;
 }
 
+.editor-form,
+.form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  color: var(--text);
+  font: inherit;
+  background: rgba(5, 15, 18, 0.8);
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 104px;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+  outline: 1px solid rgba(110, 231, 219, 0.45);
+  border-color: rgba(110, 231, 219, 0.45);
+}
+
+.field-span-2 {
+  grid-column: span 2;
+}
+
+.panel-subcopy {
+  margin: 0 0 16px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .detail-list {
   margin: 0;
   padding-left: 18px;
@@ -514,6 +606,11 @@ a {
 
 .data-table tr:last-child td {
   border-bottom: 0;
+}
+
+.table-actions {
+  width: 1%;
+  white-space: nowrap;
 }
 
 .stream-item {
@@ -562,7 +659,8 @@ a {
   .view-grid,
   .kpi-grid,
   .detail-grid,
-  .settings-grid {
+  .settings-grid,
+  .form-grid {
     grid-template-columns: 1fr;
   }
 
@@ -575,6 +673,10 @@ a {
   .hero-panel,
   .topbar {
     flex-direction: column;
+  }
+
+  .field-span-2 {
+    grid-column: auto;
   }
 }
 

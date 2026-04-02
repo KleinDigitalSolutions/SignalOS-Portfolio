@@ -1,5 +1,38 @@
 import { chipClass, trendClass, escapeHtml } from "./utils.js";
 
+const CASE_STATUS_OPTIONS = [
+  { value: "approval_required", label: "Freigabe erforderlich" },
+  { value: "escalated", label: "Eskaliert" },
+  { value: "evaluation_pending", label: "Bewertung ausstehend" },
+  { value: "coordination_ready", label: "Bereit für Koordination" },
+];
+
+const APPROVAL_RISK_OPTIONS = [
+  { value: "warning", label: "Warning" },
+  { value: "risk", label: "Risk" },
+  { value: "live", label: "Live" },
+];
+
+function renderUpdatedAt(value) {
+  if (/^(vor|heute|gestern|morgen)\b/i.test(value) || /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return `Aktualisiert ${escapeHtml(value)}`;
+  }
+
+  return escapeHtml(value);
+}
+
+function renderSelectOptions(options, selectedValue) {
+  return options
+    .map(
+      (option) => `
+        <option value="${escapeHtml(option.value)}" ${option.value === selectedValue ? "selected" : ""}>
+          ${escapeHtml(option.label)}
+        </option>
+      `,
+    )
+    .join("");
+}
+
 function renderMetrics(appData) {
   return `
     <section class="kpi-grid">
@@ -18,6 +51,14 @@ function renderMetrics(appData) {
   `;
 }
 
+function selectedCase(appData, uiState) {
+  return appData.priorities.find((item) => item.id === uiState.selectedCaseId) || appData.priorities[0] || null;
+}
+
+function selectedApproval(appData, uiState) {
+  return appData.approvals.find((item) => item.id === uiState.selectedApprovalId) || appData.approvals[0] || null;
+}
+
 function renderPriorityList(appData) {
   return appData.priorities
     .map(
@@ -29,7 +70,7 @@ function renderPriorityList(appData) {
               <span class="${chipClass(item.openApprovals > 0 ? "review" : "live")}">${escapeHtml(item.statusLabel)}</span>
             </div>
             <h4>${escapeHtml(item.title)}</h4>
-            <p class="copy">Verantwortlich: ${escapeHtml(item.ownerName)} · Offene Freigaben: ${item.openApprovals} · Aktualisiert ${escapeHtml(item.updatedAt)}</p>
+            <p class="copy">Verantwortlich: ${escapeHtml(item.ownerName)} · Offene Freigaben: ${item.openApprovals} · ${renderUpdatedAt(item.updatedAt)}</p>
             <div class="priority-tags">
               ${item.riskFlags.map((flag) => `<span class="pill pill-risk">${escapeHtml(flag)}</span>`).join("")}
             </div>
@@ -224,7 +265,7 @@ export const views = {
                 <h3>Blocker und operative Reibung</h3>
               </div>
             </div>
-            ${renderBottlenecks()}
+            ${renderBottlenecks(appData)}
           </section>
           <section class="panel span-6">
             <div class="panel-head">
@@ -256,10 +297,13 @@ export const views = {
     status(appData) {
       return `${appData.priorities.length} priorisierte Fälle`;
     },
-    render(appData) {
+    render(appData, uiState) {
+      const activeCase = selectedCase(appData, uiState);
+      const activeCaseDetails = activeCase?.id === appData.focusCase.id ? appData.focusCase : null;
+
       return `
         <section class="view-grid">
-          <section class="panel span-12">
+          <section class="panel span-7">
             <div class="panel-head">
               <div>
                 <p class="panel-label">Cases</p>
@@ -274,13 +318,14 @@ export const views = {
                   <th>Owner</th>
                   <th>Freigaben</th>
                   <th>System Fit</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 ${appData.priorities
                   .map(
                     (item) => `
-                      <tr>
+                      <tr class="${item.id === activeCase?.id ? "is-selected-row" : ""}">
                         <td>
                           <div class="case-title">${escapeHtml(item.title)}</div>
                           <div class="table-copy">${escapeHtml(item.domainLabel)}</div>
@@ -289,6 +334,9 @@ export const views = {
                         <td>${escapeHtml(item.ownerName)}</td>
                         <td>${item.openApprovals}</td>
                         <td>${item.fitScore}</td>
+                        <td class="table-actions">
+                          <button class="inline-button" type="button" data-select-case="${escapeHtml(item.id)}">Bearbeiten</button>
+                        </td>
                       </tr>
                     `,
                   )
@@ -296,44 +344,116 @@ export const views = {
               </tbody>
             </table>
           </section>
+
+          <section class="panel span-5">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Case Editor</p>
+                <h3>${activeCase ? escapeHtml(activeCase.title) : "Kein Case ausgewählt"}</h3>
+              </div>
+            </div>
+            ${
+              activeCase
+                ? `
+                  <form class="editor-form" data-case-form="${escapeHtml(activeCase.id)}">
+                    <div class="form-grid">
+                      <label class="field">
+                        <span>Titel</span>
+                        <input name="title" type="text" value="${escapeHtml(activeCase.title)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Domäne</span>
+                        <input name="domainLabel" type="text" value="${escapeHtml(activeCase.domainLabel)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Owner</span>
+                        <input name="ownerName" type="text" value="${escapeHtml(activeCase.ownerName)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Status</span>
+                        <select name="status">
+                          ${renderSelectOptions(CASE_STATUS_OPTIONS, activeCase.status)}
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>System Fit</span>
+                        <input name="fitScore" type="number" min="0" max="100" value="${activeCase.fitScore}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Risk Flags</span>
+                        <textarea name="riskFlags" rows="4">${escapeHtml(activeCase.riskFlags.join("\n"))}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Zusammenfassung</span>
+                        <textarea name="summary" rows="4">${escapeHtml(activeCaseDetails?.summary || "")}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Offene Entscheidung</span>
+                        <textarea name="openDecision" rows="4">${escapeHtml(activeCaseDetails?.openDecision || "")}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Nächste Schritte</span>
+                        <textarea name="nextActions" rows="4">${escapeHtml(activeCaseDetails?.nextActions?.join("\n") || "")}</textarea>
+                      </label>
+                    </div>
+                    <p class="panel-subcopy">
+                      ${activeCaseDetails ? "Fokus-Case-Felder werden mit dem Case zusammen gespeichert." : "Erweiterte Detailfelder greifen aktuell nur, wenn der ausgewählte Case zugleich der Fokus-Case ist."}
+                    </p>
+                    <button class="inline-button" type="submit">Case speichern</button>
+                  </form>
+                `
+                : `<p class="copy">Es ist kein editierbarer Case geladen.</p>`
+            }
+          </section>
+
           <section class="panel span-12">
             <div class="panel-head">
               <div>
                 <p class="panel-label">Case Entities</p>
-                <h3>Fokus-Case mit Entity-Sicht</h3>
+                <h3>${activeCaseDetails ? "Fokus-Case mit Entity-Sicht" : "Entity-Sicht für den Fokus-Case"}</h3>
               </div>
             </div>
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>Entity</th>
-                  <th>Status</th>
-                  <th>Fit</th>
-                  <th>Risk</th>
-                  <th>Confidence</th>
-                  <th>Letztes Signal</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${appData.focusCase.entities
-                  .map(
-                    (entity) => `
+            ${
+              activeCaseDetails
+                ? `
+                  <table class="data-table">
+                    <thead>
                       <tr>
-                        <td>
-                          <div class="case-title">${escapeHtml(entity.displayName)}</div>
-                          <div class="table-copy">${escapeHtml(entity.roleLabel)}</div>
-                        </td>
-                        <td><span class="pill pill-neutral">${escapeHtml(entity.status)}</span></td>
-                        <td>${entity.fitScore}</td>
-                        <td>${entity.riskScore}</td>
-                        <td>${Math.round(entity.confidence * 100)} %</td>
-                        <td>${escapeHtml(entity.lastSignal)}</td>
+                        <th>Entity</th>
+                        <th>Status</th>
+                        <th>Fit</th>
+                        <th>Risk</th>
+                        <th>Confidence</th>
+                        <th>Letztes Signal</th>
                       </tr>
-                    `,
-                  )
-                  .join("")}
-              </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                      ${appData.focusCase.entities
+                        .map(
+                          (entity) => `
+                            <tr>
+                              <td>
+                                <div class="case-title">${escapeHtml(entity.displayName)}</div>
+                                <div class="table-copy">${escapeHtml(entity.roleLabel)}</div>
+                              </td>
+                              <td><span class="pill pill-neutral">${escapeHtml(entity.status)}</span></td>
+                              <td>${entity.fitScore}</td>
+                              <td>${entity.riskScore}</td>
+                              <td>${Math.round(entity.confidence * 100)} %</td>
+                              <td>${escapeHtml(entity.lastSignal)}</td>
+                            </tr>
+                          `,
+                        )
+                        .join("")}
+                    </tbody>
+                  </table>
+                `
+                : `
+                  <article class="detail-card">
+                    <p class="copy">Die Entity-Sicht ist aktuell nur für den Fokus-Case modelliert. Basisdaten und Risk Flags des ausgewählten Cases lassen sich oben trotzdem direkt bearbeiten.</p>
+                  </article>
+                `
+            }
           </section>
         </section>
       `;
@@ -408,7 +528,9 @@ export const views = {
     status() {
       return "Audit aktiv";
     },
-    render(appData) {
+    render(appData, uiState) {
+      const activeApproval = selectedApproval(appData, uiState);
+
       return `
         <section class="view-grid">
           <section class="panel span-6">
@@ -422,7 +544,7 @@ export const views = {
               ${appData.approvals
                 .map(
                   (approval) => `
-                    <article class="approval-card">
+                    <article class="approval-card ${approval.id === activeApproval?.id ? "is-selected-card" : ""}">
                       <div class="priority-tags">
                         <span class="${chipClass(approval.risk)}">${escapeHtml(approval.dueLabel)}</span>
                         <span class="pill pill-neutral">${escapeHtml(approval.status)}</span>
@@ -430,23 +552,68 @@ export const views = {
                       <h4>${escapeHtml(approval.title)}</h4>
                       <p class="copy">Owner: ${escapeHtml(approval.owner)}</p>
                       <p class="copy">${escapeHtml(approval.reason)}</p>
-                      ${
-                        approval.status === "pending"
-                          ? `
-                            <div class="approval-actions">
+                      <div class="approval-actions">
+                        <button class="inline-button" type="button" data-select-approval="${escapeHtml(approval.id)}">Bearbeiten</button>
+                        ${
+                          approval.status === "pending"
+                            ? `
                               <button class="inline-button" type="button" data-approval-action="approved" data-approval-id="${escapeHtml(approval.id)}">Freigeben</button>
                               <button class="inline-button inline-button-danger" type="button" data-approval-action="denied" data-approval-id="${escapeHtml(approval.id)}">Ablehnen</button>
-                            </div>
-                          `
-                          : ""
-                      }
+                            `
+                            : ""
+                        }
+                      </div>
                     </article>
                   `,
                 )
                 .join("")}
             </div>
           </section>
+
           <section class="panel span-6">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Approval Editor</p>
+                <h3>${activeApproval ? escapeHtml(activeApproval.title) : "Keine Freigabe ausgewählt"}</h3>
+              </div>
+            </div>
+            ${
+              activeApproval
+                ? `
+                  <form class="editor-form" data-approval-form="${escapeHtml(activeApproval.id)}">
+                    <div class="form-grid">
+                      <label class="field field-span-2">
+                        <span>Titel</span>
+                        <input name="title" type="text" value="${escapeHtml(activeApproval.title)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Owner</span>
+                        <input name="owner" type="text" value="${escapeHtml(activeApproval.owner)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Risiko</span>
+                        <select name="risk">
+                          ${renderSelectOptions(APPROVAL_RISK_OPTIONS, activeApproval.risk)}
+                        </select>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Fällig</span>
+                        <input name="due" type="text" value="${escapeHtml(activeApproval.due)}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Begründung</span>
+                        <textarea name="reason" rows="5" required>${escapeHtml(activeApproval.reason)}</textarea>
+                      </label>
+                    </div>
+                    <p class="panel-subcopy">Statuswechsel laufen weiterhin über die Freigabe-Buttons und schreiben separate Audit-Ereignisse.</p>
+                    <button class="inline-button" type="submit">Freigabe speichern</button>
+                  </form>
+                `
+                : `<p class="copy">Es ist keine editierbare Freigabe geladen.</p>`
+            }
+          </section>
+
+          <section class="panel span-12">
             <div class="panel-head">
               <div>
                 <p class="panel-label">Event Stream</p>
@@ -455,6 +622,7 @@ export const views = {
             </div>
             <div class="stream-list">${renderEvents(appData)}</div>
           </section>
+
           <section class="panel span-12">
             <div class="panel-head">
               <div>

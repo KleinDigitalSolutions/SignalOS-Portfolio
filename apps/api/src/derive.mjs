@@ -78,10 +78,16 @@ export function deriveState(store) {
     };
   });
 
+  const focusPriority = priorities.find((priority) => priority.id === store.focusCase.id);
   const focusCaseApprovals = pendingApprovals.filter((approval) => approval.caseId === store.focusCase.id);
   const focusCase = {
     ...store.focusCase,
-    statusLabel: focusCaseApprovals.length > 0 ? "Freigabe nötig" : "Bereit für Koordination",
+    statusLabel:
+      focusCaseApprovals.length > 0
+        ? "Freigabe nötig"
+        : focusPriority?.status === "escalated"
+          ? "Eskaliert"
+          : focusPriority?.statusLabel || "Bereit für Koordination",
   };
 
   return {
