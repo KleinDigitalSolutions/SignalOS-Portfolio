@@ -1,10 +1,17 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname, extname, join, normalize, relative, resolve } from "node:path";
 
 const HOST = "127.0.0.1";
 const PORT = Number(process.env.PORT || 4173);
-const ROOT = "/Users/bucci/SignalOS-Portfolio/apps/web/prototype";
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(join(SCRIPT_DIR, ".."));
+const ENTRYPOINT = resolve(join(ROOT, "apps/web/app/index.html"));
+const ALLOWED_PREFIXES = [
+  resolve(join(ROOT, "apps/web/app")),
+  resolve(join(ROOT, "packages/ui/src")),
+];
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -19,14 +26,38 @@ const MIME_TYPES = {
 };
 
 function resolvePath(urlPath) {
-  const safePath = normalize(urlPath).replace(/^(\.\.[/\\])+/, "");
-  const relativePath = safePath === "/" ? "/index.html" : safePath;
-  return join(ROOT, relativePath);
+  if (urlPath === "/" || urlPath === "/index.html") {
+    return ENTRYPOINT;
+  }
+
+  const safePath = normalize(urlPath);
+  const relativePath = safePath.replace(/^[/\\]+/, "");
+  const candidate = resolve(join(ROOT, relativePath));
+
+  if (!candidate.startsWith(ROOT)) {
+    return null;
+  }
+
+  const isAllowed = ALLOWED_PREFIXES.some((prefix) => {
+    const rel = relative(prefix, candidate);
+    return rel === "" || (!rel.startsWith("..") && !rel.startsWith("../") && !rel.startsWith("..\\"));
+  });
+
+  if (!isAllowed) {
+    return null;
+  }
+
+  return candidate;
 }
 
 const server = createServer(async (request, response) => {
   try {
     const filePath = resolvePath(new URL(request.url, `http://${HOST}:${PORT}`).pathname);
+    if (!filePath) {
+      response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Forbidden");
+      return;
+    }
     const extension = extname(filePath).toLowerCase();
     const file = await readFile(filePath);
 
@@ -42,5 +73,5 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`SignalOS prototype available at http://${HOST}:${PORT}`);
+  console.log(`SignalOS app preview available at http://${HOST}:${PORT}`);
 });

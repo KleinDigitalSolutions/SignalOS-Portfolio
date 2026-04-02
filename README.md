@@ -115,3 +115,5 @@ npm run dev:web
 ```
 
 Anschließend ist der Stand unter `http://127.0.0.1:4173` erreichbar.
+
+Der Preview-Server ist bewusst eingegrenzt und gibt nur die Web-App-Vorschau sowie benötigte UI-Assets aus.

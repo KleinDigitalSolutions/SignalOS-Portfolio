@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SignalOS App Preview</title>
+    <meta
+      name="description"
+      content="SignalOS ist ein AI-gestütztes Operating System für komplexe High-Stakes-Workflows."
+    />
+    <link rel="stylesheet" href="/apps/web/app/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">S</div>
+          <div>
+            <p class="eyebrow">Operating System</p>
+            <h1>SignalOS</h1>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Hauptnavigation">
+          <a class="nav-link" href="#/command-center" data-route="command-center">Command Center</a>
+          <a class="nav-link" href="#/workflows" data-route="workflows">Workflows</a>
+          <a class="nav-link" href="#/cases" data-route="cases">Cases</a>
+          <a class="nav-link" href="#/insights" data-route="insights">Insights</a>
+          <a class="nav-link" href="#/audit" data-route="audit">Audit</a>
+          <a class="nav-link" href="#/settings" data-route="settings">Settings</a>
+        </nav>
+
+        <section class="sidebar-panel">
+          <p class="panel-label">Leitplanken</p>
+          <ul class="sidebar-list">
+            <li>Human-in-the-loop bei High-Impact-Aktionen</li>
+            <li>Auditierbare Zustandswechsel</li>
+            <li>Strukturierte Agenten-Outputs</li>
+          </ul>
+        </section>
+
+        <section class="sidebar-panel">
+          <p class="panel-label">Systemlage</p>
+          <p class="sidebar-copy" id="system-summary">
+            Initialisiere SignalOS App Preview.
+          </p>
+        </section>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="view-eyebrow">Control Tower</p>
+            <h2 id="view-title">SignalOS lädt…</h2>
+          </div>
+          <div class="topbar-actions">
+            <div class="status-chip status-live" id="status-chip">System stabil</div>
+            <button class="ghost-button" type="button" id="focus-case-button">Fokus-Case öffnen</button>
+          </div>
+        </header>
+
+        <section id="app-view" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <script type="module" src="/apps/web/app/app.js"></script>
+  </body>
+</html>
