@@ -120,34 +120,97 @@ function renderEvents(appData) {
     .join("");
 }
 
+function pendingApprovals(appData) {
+  return appData.approvals.filter((approval) => approval.status === "pending");
+}
+
+function commandCenterTone(appData) {
+  const pendingCount = pendingApprovals(appData).length;
+  if (pendingCount >= 3) return "risk";
+  if (pendingCount > 0) return "review";
+  return "live";
+}
+
+function renderHeroOverview(appData) {
+  const pending = pendingApprovals(appData);
+  const bottleneck = appData.bottlenecks[0];
+  const escalatedCases = appData.priorities.filter((item) => item.status === "escalated").length;
+
+  return `
+    <aside class="hero-overview">
+      <p class="panel-label">Live Snapshot</p>
+      <div class="hero-stat-grid">
+        <article class="hero-stat-card">
+          <span>Freigaben offen</span>
+          <strong>${pending.length}</strong>
+          <p>${pending[0] ? escapeHtml(pending[0].title) : "Keine offene Entscheidung"}</p>
+        </article>
+        <article class="hero-stat-card">
+          <span>Priorisierte Fälle</span>
+          <strong>${appData.priorities.length}</strong>
+          <p>${escalatedCases} eskaliert, ${appData.focusCase.openApprovals || pending.filter((item) => item.caseId === appData.focusCase.id).length} im Fokus-Case</p>
+        </article>
+        <article class="hero-stat-card">
+          <span>Engpass</span>
+          <strong>${escapeHtml(bottleneck.stage)}</strong>
+          <p>${escapeHtml(bottleneck.summary)}</p>
+        </article>
+      </div>
+      <div class="hero-link-row">
+        <a class="inline-button" href="#/cases">Cases steuern</a>
+        <a class="inline-button" href="#/audit">Audit prüfen</a>
+      </div>
+    </aside>
+  `;
+}
+
 export const views = {
   "command-center": {
     eyebrow(appData) {
       return appData.hero.eyebrow;
     },
-    title(appData) {
-      return appData.hero.title;
+    title() {
+      return "Command Center";
     },
-    status() {
-      return "System stabil";
+    summary() {
+      return "Live-Lage für sensible Prozessketten mit Fokus auf Prioritäten, Engpässe, Freigaben und nachvollziehbare Zustandswechsel.";
+    },
+    statusTone(appData) {
+      return commandCenterTone(appData);
+    },
+    status(appData) {
+      return commandCenterTone(appData) === "risk"
+        ? "Hoher Handlungsdruck"
+        : commandCenterTone(appData) === "review"
+          ? "Aufmerksamkeit nötig"
+          : "System stabil";
     },
     render(appData) {
       return `
         <section class="view-grid">
           <section class="hero-panel span-12">
-            <div>
+            <div class="hero-copy-block">
               <p class="eyebrow">${escapeHtml(appData.hero.eyebrow)}</p>
               <h3>${escapeHtml(appData.hero.title)}</h3>
               <p class="copy">${escapeHtml(appData.hero.copy)}</p>
+              <div class="hero-stack">
+                ${appData.hero.chips
+                  .map((chip) => `<span class="${chipClass(chip.tone)}">${escapeHtml(chip.label)}</span>`)
+                  .join("")}
+              </div>
             </div>
-            <div class="hero-stack">
-              ${appData.hero.chips
-                .map((chip) => `<span class="${chipClass(chip.tone)}">${escapeHtml(chip.label)}</span>`)
-                .join("")}
-            </div>
+            ${renderHeroOverview(appData)}
           </section>
 
-          <section class="span-12">${renderMetrics(appData)}</section>
+          <section class="panel span-12">
+            <div class="panel-head panel-head-tight">
+              <div>
+                <p class="panel-label">System Snapshot</p>
+                <h3>Kernmetriken für Durchsatz, Risiko und Freigaben</h3>
+              </div>
+            </div>
+            ${renderMetrics(appData)}
+          </section>
 
           <section class="panel span-8">
             <div class="panel-head">
@@ -225,6 +288,12 @@ export const views = {
     title() {
       return "Workflows und Systemdurchsatz";
     },
+    summary() {
+      return "Überblick über aktive Prozessketten, Latenzen und operative Reibungspunkte entlang des Systems.";
+    },
+    statusTone(appData) {
+      return appData.bottlenecks[0]?.severity === "critical" ? "risk" : "review";
+    },
     status() {
       return "Überwachung aktiv";
     },
@@ -293,6 +362,12 @@ export const views = {
     },
     title() {
       return "Fälle, Entitäten und Entscheidungen";
+    },
+    summary() {
+      return "Pflege der operativen Fälle mit klarer Owner-, Status-, Risiko- und Freigabe-Sicht.";
+    },
+    statusTone() {
+      return "review";
     },
     status(appData) {
       return `${appData.priorities.length} priorisierte Fälle`;
@@ -466,6 +541,12 @@ export const views = {
     title() {
       return "Wirkung, Trends und Vertrauenssignale";
     },
+    summary() {
+      return "Verdichtete Sicht auf Hebel, Governance-Signale und qualitative Beobachtungen im laufenden System.";
+    },
+    statusTone() {
+      return "live";
+    },
     status() {
       return "Metriken aktuell";
     },
@@ -524,6 +605,12 @@ export const views = {
     },
     title() {
       return "Nachvollziehbarkeit von Aktionen und Overrides";
+    },
+    summary() {
+      return "Freigaben, Systemereignisse und Audit-Spuren in einer Ansicht für kontrollierte, überprüfbare Entscheidungen.";
+    },
+    statusTone() {
+      return "review";
     },
     status() {
       return "Audit aktiv";
@@ -669,6 +756,12 @@ export const views = {
     },
     title() {
       return "Regeln, Rechte und Sicherheitsgrenzen";
+    },
+    summary() {
+      return "Governance-Layer für Freigaben, Rechte, Retention und Vertrauensgrenzen im Produkt.";
+    },
+    statusTone() {
+      return "live";
     },
     status() {
       return "Policies aktiv";

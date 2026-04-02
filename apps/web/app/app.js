@@ -3,6 +3,7 @@ import { views } from "./views.js";
 const viewRoot = document.getElementById("app-view");
 const titleNode = document.getElementById("view-title");
 const eyebrowNode = document.getElementById("view-eyebrow");
+const summaryNode = document.getElementById("view-summary");
 const statusChipNode = document.getElementById("status-chip");
 const systemSummaryNode = document.getElementById("system-summary");
 const focusCaseButton = document.getElementById("focus-case-button");
@@ -90,6 +91,10 @@ function parseLineList(value) {
     .filter(Boolean);
 }
 
+function applyStatusTone(tone) {
+  statusChipNode.className = `status-chip status-${tone || "live"}`;
+}
+
 function render() {
   const route = currentRoute();
   const view = views[route] || views["command-center"];
@@ -104,7 +109,9 @@ function render() {
 
   eyebrowNode.textContent = view.eyebrow(appState, uiState);
   titleNode.textContent = view.title(appState, uiState);
+  summaryNode.textContent = view.summary(appState, uiState);
   statusChipNode.textContent = view.status(appState, uiState);
+  applyStatusTone(view.statusTone?.(appState, uiState) || "live");
   systemSummaryNode.textContent = appState.summary;
   viewRoot.innerHTML = `${renderNotice()}${view.render(appState, uiState)}`;
   updateNavigation(route);
