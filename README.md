@@ -1,126 +1,130 @@
 # SignalOS
 
-SignalOS ist ein AI-gestütztes Operating System für komplexe High-Stakes-Workflows.
+SignalOS is a portfolio project for an AI-native operating layer around complex, high-stakes workflows.
 
-Es verbindet Intake, Analyse, Anreicherung, Kommunikation, Bewertung, Koordination und Monitoring in einem zusammenhängenden, auditierbaren System. Das Projekt wird als hochwertiges Portfolio-Stück entwickelt und nutzt Recruiting als ersten Showcase, ohne die Produktmarke auf eine einzelne Domäne zu verengen.
+The goal is not to present another chatbot demo or static dashboard, but a system that makes operational states, bottlenecks, approvals, auditability, and human oversight visible and actionable. The first showcase uses Recruiting Operations, while the underlying product logic is designed to transfer to domains such as partner onboarding, vendor operations, or compliance intake.
 
-Der aktuelle Stand ist nicht nur visuell, sondern lokal funktionsfähig: Die Web-App arbeitet gegen eine echte Node-API mit persistentem JSON-Store, Freigabeaktionen schreiben Ereignisse und Audit-Spuren zurück in den Zustand.
+## What This Project Demonstrates
 
-## Warum dieses Projekt
+- product thinking beyond isolated AI features
+- end-to-end workflow design instead of prompt-level prototyping
+- human-in-the-loop control for sensitive actions
+- event and audit awareness as first-class system concerns
+- ability to turn a concept into a working local application
 
-Viele AI-Demos zeigen Texte, Widgets oder punktuelle Automatisierungen.  
-SignalOS verfolgt einen anderen Anspruch:
+## Current Functional Scope
 
-- nicht nur Features, sondern Betriebslogik
-- nicht nur Automatisierung, sondern kontrollierte Orchestrierung
-- nicht nur AI-Output, sondern nachvollziehbare Entscheidungen
-- nicht nur Dashboarding, sondern ein echtes Command Center
+The repository already contains a functional local application:
 
-Das Ziel ist ein System, das operative Reibung reduziert, Durchlaufzeiten verkürzt, Risiko sichtbar macht und menschliche Entscheidungen gezielt unterstützt.
+- a real Node.js server for API delivery and static app hosting
+- persistent local state in `data/signalos.json`
+- derived system views for metrics, bottlenecks, case state, and approval status
+- editable cases and approvals through the UI
+- write actions that update the underlying store, event stream, and audit log
+- explicit approval decisions with state transitions and traceability
+- restricted static file serving with path protection
 
-## Produktprinzipien
+## Why It Matters
 
-- AI-First, aber nicht AI-blind
-- Human-in-the-loop bei kritischen Schritten
-- strukturierte Agenten-Outputs statt unkontrollierter Textartefakte
-- Event-getriebene Prozesslogik statt linearer Einmal-Flows
-- sichtbare Governance, Logging und Begründbarkeit
-- Design auf Enterprise-Niveau statt generischer Demo-Optik
+Many AI projects stop at generation quality. SignalOS focuses on operational reliability:
 
-## Erster Showcase
+- which cases need attention right now
+- where human approval blocks throughput
+- which action changed the system state
+- how a decision can be traced afterward
+- how automation stays useful without becoming opaque
 
-Der erste vertikale Showcase ist Recruiting Operations:
+This is the layer where product judgment, workflow design, and engineering discipline meet.
 
-- Intake eines Suchauftrags
-- Discovery und Anreicherung relevanter Profile
-- personalisierte Kommunikation
-- Bewertung entlang nachvollziehbarer Kriterien
-- Termin- und Statuskoordination
-- Monitoring, Bottlenecks und operative Kennzahlen
+## Technical Snapshot
 
-Wichtig ist dabei die Produktlogik: SignalOS bleibt ein universelles System, dessen Architektur auch für andere Bereiche wie Partner-Onboarding, Vendor-Ops oder Compliance Intake plausibel ist.
+Core characteristics of the current implementation:
 
-## Kernmodule
+- lightweight local stack with no framework dependency for the API runtime
+- browser app rendered from modular client-side JavaScript
+- persistent JSON-backed state to simulate a real operational store
+- separation between stored state and derived presentation state
+- explicit event and audit append logic for sensitive actions
+- security-conscious static asset handling
 
-- `Intake Engine`
-- `Discovery Engine`
-- `Enrichment Engine`
-- `Messaging Engine`
-- `Evaluation Engine`
-- `Coordination Engine`
-- `Command Center`
-- `Audit & Insight Layer`
+Main implementation areas:
 
-## Repository-Struktur
+- `apps/api/src/server.mjs`
+- `apps/api/src/store.mjs`
+- `apps/api/src/derive.mjs`
+- `apps/web/app/app.js`
+- `apps/web/app/views.js`
+
+## Product Principles
+
+- AI-first, but not AI-blind
+- human approval for high-impact actions
+- structured operational state over loose text output
+- visible governance instead of hidden automation
+- explainable transitions instead of silent background magic
+- product-grade interface direction instead of generic prototype styling
+
+## Local Run
+
+The project can be started locally without additional services:
+
+```bash
+npm run dev:web
+```
+
+Then open:
+
+```text
+http://127.0.0.1:4173
+```
+
+The app runs directly against the local API and persists state in `data/signalos.json`.
+
+## Repository Structure
 
 ```text
 .
 ├── AGENTS.md
 ├── PROJECT.md
 ├── README.md
+├── apps
+│   ├── api
+│   └── web
 ├── data
 │   └── signalos.json
-└── docs
-    ├── architecture.md
-    ├── data-model.md
-    ├── event-model.md
-    ├── information-architecture.md
-    ├── roadmap.md
-    └── security-governance.md
+├── docs
+│   ├── architecture.md
+│   ├── data-model.md
+│   ├── demo-scenario.md
+│   ├── event-model.md
+│   ├── information-architecture.md
+│   ├── roadmap.md
+│   └── security-governance.md
+└── packages
+    ├── contracts
+    └── ui
 ```
 
-## Dokumente
+## Documentation
 
-- [Projekt-Masterdokument](./PROJECT.md)
-- [Architektur](./docs/architecture.md)
-- [Datenmodell](./docs/data-model.md)
-- [Ereignis- und Zustandsmodell](./docs/event-model.md)
-- [Informationsarchitektur](./docs/information-architecture.md)
-- [Brand- und Designsystem](./docs/brand-system.md)
-- [Demo-Szenario](./docs/demo-scenario.md)
-- [Sicherheit und Governance](./docs/security-governance.md)
+Additional project material:
+
+- [Project Master Document](./PROJECT.md)
+- [Architecture](./docs/architecture.md)
+- [Data Model](./docs/data-model.md)
+- [Event Model](./docs/event-model.md)
+- [Information Architecture](./docs/information-architecture.md)
+- [Brand System](./docs/brand-system.md)
+- [Demo Scenario](./docs/demo-scenario.md)
+- [Security and Governance](./docs/security-governance.md)
 - [Roadmap](./docs/roadmap.md)
 
-## Qualitätsanspruch
+## Evaluation Context
 
-SignalOS wird nicht als schneller Showcase gebaut, sondern als glaubwürdiges Produktkonzept mit technischer und gestalterischer Reife. Jede weitere Umsetzung im Repository muss deshalb vier Ebenen gleichzeitig bedienen:
+For a recruiter, hiring manager, or technical reviewer, SignalOS is best read as evidence of:
 
-- Produkt- und Prozessverständnis
-- technische Architektur
-- Governance und Sicherheit
-- visuelle und kommunikative Qualität
-
-## Status
-
-Aktuell entsteht das Fundament:
-
-- Produkt- und Markenrahmen
-- Architektur und Modulgrenzen
-- Sicherheits- und Governance-Basis
-- Informationsarchitektur der Produktoberfläche
-- Daten- und Ereignismodell des Systems
-- erste visuelle Produkt- und Showcase-Richtung
-- funktionaler lokaler App- und API-Stand
-- Roadmap für die nächste Umsetzungsphase
-
-## Nächste Schritte
-
-- visuelle Produktidentität schärfen
-- Screen-System und Command-Center-Flow entwerfen
-- technische App-Struktur konkretisieren
-- erste API- und UI-Verträge definieren
-- erste interaktive Oberfläche implementieren
-
-## Lokale Vorschau
-
-Der aktuelle Web-Prototyp lässt sich ohne zusätzliche Abhängigkeiten lokal starten:
-
-```bash
-npm run dev:web
-```
-
-Anschließend ist der Stand unter `http://127.0.0.1:4173` erreichbar.
-
-Die Web-App arbeitet dabei direkt gegen die lokale API und den persistenten Store `data/signalos.json`.
-
-Der Server ist bewusst eingegrenzt und gibt nur die Web-App sowie benötigte UI-Assets aus.
+- strong product framing for AI systems
+- architectural thinking around state, control, and observability
+- pragmatic implementation ability across backend and frontend
+- awareness of safety, approval design, and audit requirements
+- taste for building software that feels like a product, not a mockup
