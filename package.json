@@ -8,8 +8,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:web": "node ./scripts/serve-prototype.mjs",
-    "dev:api": "echo \"API scaffold pending\"",
+    "dev:web": "node ./apps/api/src/server.mjs",
+    "dev:api": "node ./apps/api/src/server.mjs",
     "lint": "echo \"Lint setup pending\"",
     "test": "echo \"Test setup pending\""
   }

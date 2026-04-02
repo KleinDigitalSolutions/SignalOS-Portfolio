@@ -15,14 +15,15 @@ Die konkrete App-Implementierung soll auf den vorhandenen Produktartefakten aufb
 
 ## App Preview
 
-Unter [`app`](./app/index.html) liegt jetzt eine modulare App Preview mit mehreren Ansichten.
+Unter [`app`](./app/index.html) liegt jetzt eine modulare, funktionale App mit mehreren Ansichten.
 
-Ziel der App Preview:
+Ziel des aktuellen Web-Standes:
 
 - visuelle Richtung festziehen
 - Informationsdichte und Priorisierung testen
 - Governance und Freigaben sichtbar machen
-- echte View-Logik und modulare UI-Struktur zeigen, bevor Framework-Code folgt
+- echte API-Anbindung und modulare UI-Struktur zeigen
+- echte Freigabeaktionen mit persistenter Zustandsänderung ermöglichen
 
 Der frühere Stand unter [`prototype`](./prototype/index.html) bleibt als Referenz erhalten.
 
@@ -34,6 +35,8 @@ Aus dem Repository-Root:
 npm run dev:web
 ```
 
-Danach ist der Prototyp unter `http://127.0.0.1:4173` erreichbar.
+Danach ist die App unter `http://127.0.0.1:4173` erreichbar.
 
-Der lokale Preview-Server liefert bewusst nur die App-Vorschau und die benötigten UI-Token-Dateien aus. Repository-interne Pfade wie `.git` bleiben blockiert.
+Die Web-App läuft gegen die lokale API und den persistenten Store in `data/signalos.json`.
+
+Der lokale Server liefert bewusst nur die App-Vorschau und die benötigten UI-Token-Dateien aus. Repository-interne Pfade wie `.git` bleiben blockiert.

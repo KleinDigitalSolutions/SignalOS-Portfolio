@@ -4,6 +4,8 @@ SignalOS ist ein AI-gestütztes Operating System für komplexe High-Stakes-Workf
 
 Es verbindet Intake, Analyse, Anreicherung, Kommunikation, Bewertung, Koordination und Monitoring in einem zusammenhängenden, auditierbaren System. Das Projekt wird als hochwertiges Portfolio-Stück entwickelt und nutzt Recruiting als ersten Showcase, ohne die Produktmarke auf eine einzelne Domäne zu verengen.
 
+Der aktuelle Stand ist nicht nur visuell, sondern lokal funktionsfähig: Die Web-App arbeitet gegen eine echte Node-API mit persistentem JSON-Store, Freigabeaktionen schreiben Ereignisse und Audit-Spuren zurück in den Zustand.
+
 ## Warum dieses Projekt
 
 Viele AI-Demos zeigen Texte, Widgets oder punktuelle Automatisierungen.  
@@ -56,6 +58,8 @@ Wichtig ist dabei die Produktlogik: SignalOS bleibt ein universelles System, des
 ├── AGENTS.md
 ├── PROJECT.md
 ├── README.md
+├── data
+│   └── signalos.json
 └── docs
     ├── architecture.md
     ├── data-model.md
@@ -96,6 +100,7 @@ Aktuell entsteht das Fundament:
 - Informationsarchitektur der Produktoberfläche
 - Daten- und Ereignismodell des Systems
 - erste visuelle Produkt- und Showcase-Richtung
+- funktionaler lokaler App- und API-Stand
 - Roadmap für die nächste Umsetzungsphase
 
 ## Nächste Schritte
@@ -116,4 +121,6 @@ npm run dev:web
 
 Anschließend ist der Stand unter `http://127.0.0.1:4173` erreichbar.
 
-Der Preview-Server ist bewusst eingegrenzt und gibt nur die Web-App-Vorschau sowie benötigte UI-Assets aus.
+Die Web-App arbeitet dabei direkt gegen die lokale API und den persistenten Store `data/signalos.json`.
+
+Der Server ist bewusst eingegrenzt und gibt nur die Web-App sowie benötigte UI-Assets aus.

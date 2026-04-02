@@ -1,7 +1,6 @@
-import { appData } from "./data.js";
 import { chipClass, trendClass, escapeHtml } from "./utils.js";
 
-function renderMetrics() {
+function renderMetrics(appData) {
   return `
     <section class="kpi-grid">
       ${appData.metrics
@@ -19,7 +18,7 @@ function renderMetrics() {
   `;
 }
 
-function renderPriorityList() {
+function renderPriorityList(appData) {
   return appData.priorities
     .map(
       (item) => `
@@ -45,7 +44,7 @@ function renderPriorityList() {
     .join("");
 }
 
-function renderBottlenecks() {
+function renderBottlenecks(appData) {
   return appData.bottlenecks
     .map(
       (item) => `
@@ -66,7 +65,7 @@ function renderBottlenecks() {
     .join("");
 }
 
-function renderEvents() {
+function renderEvents(appData) {
   return appData.events
     .map(
       (event) => `
@@ -82,10 +81,16 @@ function renderEvents() {
 
 export const views = {
   "command-center": {
-    eyebrow: appData.hero.eyebrow,
-    title: appData.hero.title,
-    status: "System stabil",
-    render() {
+    eyebrow(appData) {
+      return appData.hero.eyebrow;
+    },
+    title(appData) {
+      return appData.hero.title;
+    },
+    status() {
+      return "System stabil";
+    },
+    render(appData) {
       return `
         <section class="view-grid">
           <section class="hero-panel span-12">
@@ -101,7 +106,7 @@ export const views = {
             </div>
           </section>
 
-          <section class="span-12">${renderMetrics()}</section>
+          <section class="span-12">${renderMetrics(appData)}</section>
 
           <section class="panel span-8">
             <div class="panel-head">
@@ -111,7 +116,7 @@ export const views = {
               </div>
               <a class="inline-button" href="#/cases">Alle Cases</a>
             </div>
-            <div class="priority-list">${renderPriorityList()}</div>
+            <div class="priority-list">${renderPriorityList(appData)}</div>
           </section>
 
           <section class="panel span-4">
@@ -121,7 +126,7 @@ export const views = {
                 <h3>Staupunkte entlang des Flows</h3>
               </div>
             </div>
-            ${renderBottlenecks()}
+            ${renderBottlenecks(appData)}
           </section>
 
           <section class="panel span-6">
@@ -166,17 +171,23 @@ export const views = {
                 <h3>Relevante Systemereignisse</h3>
               </div>
             </div>
-            <div class="stream-list">${renderEvents()}</div>
+            <div class="stream-list">${renderEvents(appData)}</div>
           </section>
         </section>
       `;
     },
   },
   workflows: {
-    eyebrow: "Flow Monitor",
-    title: "Workflows und Systemdurchsatz",
-    status: "Überwachung aktiv",
-    render() {
+    eyebrow() {
+      return "Flow Monitor";
+    },
+    title() {
+      return "Workflows und Systemdurchsatz";
+    },
+    status() {
+      return "Überwachung aktiv";
+    },
+    render(appData) {
       return `
         <section class="view-grid">
           <section class="panel span-12">
@@ -236,10 +247,16 @@ export const views = {
     },
   },
   cases: {
-    eyebrow: "Case Management",
-    title: "Fälle, Entitäten und Entscheidungen",
-    status: "3 priorisierte Fälle",
-    render() {
+    eyebrow() {
+      return "Case Management";
+    },
+    title() {
+      return "Fälle, Entitäten und Entscheidungen";
+    },
+    status(appData) {
+      return `${appData.priorities.length} priorisierte Fälle`;
+    },
+    render(appData) {
       return `
         <section class="view-grid">
           <section class="panel span-12">
@@ -323,13 +340,19 @@ export const views = {
     },
   },
   insights: {
-    eyebrow: "Operational Insight",
-    title: "Wirkung, Trends und Vertrauenssignale",
-    status: "Metriken aktuell",
-    render() {
+    eyebrow() {
+      return "Operational Insight";
+    },
+    title() {
+      return "Wirkung, Trends und Vertrauenssignale";
+    },
+    status() {
+      return "Metriken aktuell";
+    },
+    render(appData) {
       return `
         <section class="view-grid">
-          <section class="span-12">${renderMetrics()}</section>
+          <section class="span-12">${renderMetrics(appData)}</section>
           <section class="panel span-6">
             <div class="panel-head">
               <div>
@@ -376,10 +399,16 @@ export const views = {
     },
   },
   audit: {
-    eyebrow: "Audit Trail",
-    title: "Nachvollziehbarkeit von Aktionen und Overrides",
-    status: "Audit aktiv",
-    render() {
+    eyebrow() {
+      return "Audit Trail";
+    },
+    title() {
+      return "Nachvollziehbarkeit von Aktionen und Overrides";
+    },
+    status() {
+      return "Audit aktiv";
+    },
+    render(appData) {
       return `
         <section class="view-grid">
           <section class="panel span-6">
@@ -395,11 +424,22 @@ export const views = {
                   (approval) => `
                     <article class="approval-card">
                       <div class="priority-tags">
-                        <span class="${chipClass(approval.risk)}">${escapeHtml(approval.due)}</span>
+                        <span class="${chipClass(approval.risk)}">${escapeHtml(approval.dueLabel)}</span>
+                        <span class="pill pill-neutral">${escapeHtml(approval.status)}</span>
                       </div>
                       <h4>${escapeHtml(approval.title)}</h4>
                       <p class="copy">Owner: ${escapeHtml(approval.owner)}</p>
                       <p class="copy">${escapeHtml(approval.reason)}</p>
+                      ${
+                        approval.status === "pending"
+                          ? `
+                            <div class="approval-actions">
+                              <button class="inline-button" type="button" data-approval-action="approved" data-approval-id="${escapeHtml(approval.id)}">Freigeben</button>
+                              <button class="inline-button inline-button-danger" type="button" data-approval-action="denied" data-approval-id="${escapeHtml(approval.id)}">Ablehnen</button>
+                            </div>
+                          `
+                          : ""
+                      }
                     </article>
                   `,
                 )
@@ -413,7 +453,7 @@ export const views = {
                 <h3>Systemereignisse mit Sicherheitsbezug</h3>
               </div>
             </div>
-            <div class="stream-list">${renderEvents()}</div>
+            <div class="stream-list">${renderEvents(appData)}</div>
           </section>
           <section class="panel span-12">
             <div class="panel-head">
@@ -456,10 +496,16 @@ export const views = {
     },
   },
   settings: {
-    eyebrow: "Policy Surface",
-    title: "Regeln, Rechte und Sicherheitsgrenzen",
-    status: "Policies aktiv",
-    render() {
+    eyebrow() {
+      return "Policy Surface";
+    },
+    title() {
+      return "Regeln, Rechte und Sicherheitsgrenzen";
+    },
+    status() {
+      return "Policies aktiv";
+    },
+    render(appData) {
       return `
         <section class="view-grid">
           <section class="panel span-12">

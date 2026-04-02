@@ -190,6 +190,17 @@ a {
   cursor: pointer;
 }
 
+.inline-button-danger {
+  border-color: rgba(255, 125, 111, 0.3);
+  color: #ffb0a7;
+}
+
+.inline-button-danger:hover,
+.inline-button-danger:focus-visible {
+  border-color: rgba(255, 125, 111, 0.5);
+  background: rgba(255, 125, 111, 0.08);
+}
+
 .ghost-button:hover,
 .inline-button:hover,
 .ghost-button:focus-visible,
@@ -353,6 +364,13 @@ a {
 .settings-list {
   display: grid;
   gap: 14px;
+}
+
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .priority-item,
