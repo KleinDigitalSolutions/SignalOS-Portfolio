@@ -105,3 +105,13 @@ Aktuell entsteht das Fundament:
 - technische App-Struktur konkretisieren
 - erste API- und UI-Verträge definieren
 - erste interaktive Oberfläche implementieren
+
+## Lokale Vorschau
+
+Der aktuelle Web-Prototyp lässt sich ohne zusätzliche Abhängigkeiten lokal starten:
+
+```bash
+npm run dev:web
+```
+
+Anschließend ist der Stand unter `http://127.0.0.1:4173` erreichbar.

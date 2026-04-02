@@ -23,3 +23,13 @@ Ziel des Prototyps:
 - Informationsdichte und Priorisierung testen
 - Governance und Freigaben sichtbar machen
 - eine hochwertige Portfolio-Anmutung herstellen, bevor Framework-Code folgt
+
+## Lokal starten
+
+Aus dem Repository-Root:
+
+```bash
+npm run dev:web
+```
+
+Danach ist der Prototyp unter `http://127.0.0.1:4173` erreichbar.
