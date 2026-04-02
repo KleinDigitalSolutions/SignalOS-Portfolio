@@ -92,34 +92,116 @@ function fallbackFlow() {
   ];
 }
 
-function detailForCase(store, priority) {
-  const detail = store.caseDetails?.find((entry) => entry.caseId === priority.id);
+function fallbackOutreachDraft(priority, entities) {
+  const target = entities[0];
 
-  if (detail) {
+  return {
+    id: `outreach-${priority.id}`,
+    targetEntityId: target?.id || null,
+    targetEntityLabel: target?.displayName || "Priorisiertes Profil",
+    channel: "email",
+    tone: "präzise und persönlich",
+    subject: `${priority.title}: kurzer Austausch zu einer AI-First-Rolle?`,
+    opening: `Hallo ${target?.displayName || "Profil"},`,
+    body: "dein Profil zeigt mehrere Signale, die gut zu einer Rolle mit agentischen Workflows, operativer Ownership und hoher Sichtbarkeit passen.",
+    rationale: "Hoher System Fit, relevante Delivery-Signale und deutliche Nähe zu den priorisierten Must-haves.",
+    status: "draft",
+    approvalOwner: priority.ownerName || "Hiring Lead",
+    approvalDue: "heute, 16:00 Uhr",
+    approvalRisk: "warning",
+    approvalId: null,
+  };
+}
+
+function recommendedActionForCase(store, priority, detail) {
+  const draft = detail.outreachDraft;
+  const draftApproval = draft?.approvalId
+    ? store.approvals.find((approval) => approval.id === draft.approvalId)
+    : null;
+
+  if (draftApproval?.status === "pending" || draft?.status === "pending_approval") {
     return {
-      summary: detail.summary,
-      openDecision: detail.openDecision,
-      riskFlags: detail.riskFlags || priority.riskFlags,
-      nextActions: detail.nextActions || [],
-      entities: detail.entities || [],
-      roleBrief: detail.roleBrief || fallbackRoleBrief(priority),
-      flow: detail.flow || fallbackFlow(),
+      title: "Freigabe für Outreach-Draft priorisieren",
+      summary: `Der Draft an ${draft.targetEntityLabel} ist erstellt und wartet auf menschliche Entscheidung, bevor die Ansprache ausgelöst wird.`,
+      owner: draftApproval?.owner || draft?.approvalOwner || priority.ownerName,
+      tone: "review",
+      cta: "Freigabe im Audit prüfen",
     };
   }
 
-  if (store.focusCase?.id === priority.id) {
+  if (draftApproval?.status === "approved" || draft?.status === "approved") {
     return {
-      summary: store.focusCase.summary,
-      openDecision: store.focusCase.openDecision,
-      riskFlags: store.focusCase.riskFlags || priority.riskFlags,
-      nextActions: store.focusCase.nextActions || [],
-      entities: store.focusCase.entities || fallbackEntities(priority),
-      roleBrief: fallbackRoleBrief(priority),
-      flow: fallbackFlow(),
+      title: "Outreach auslösen und Reply-Tracking starten",
+      summary: `Die Ansprache an ${draft.targetEntityLabel} ist freigegeben. Jetzt zählt schneller Versand mit sauberem Monitoring der ersten Replies.`,
+      owner: priority.ownerName,
+      tone: "live",
+      cta: "Versand koordinieren",
+    };
+  }
+
+  if (draftApproval?.status === "denied" || draft?.status === "needs_revision") {
+    return {
+      title: "Outreach-Draft überarbeiten",
+      summary: `Der aktuelle Draft für ${draft.targetEntityLabel} wurde gestoppt. Begründung, Tonalität oder Evidenz sollten vor einer neuen Freigabe nachgeschärft werden.`,
+      owner: priority.ownerName,
+      tone: "risk",
+      cta: "Draft überarbeiten",
     };
   }
 
   return {
+    title: "Outreach-Draft finalisieren und Freigabe anfordern",
+    summary: `Für ${draft.targetEntityLabel} liegt ein erster Draft bereit. Der nächste Hebel ist eine saubere Freigabe, damit der Candidate Flow aus Discovery in Outreach kippt.`,
+    owner: draft?.approvalOwner || priority.ownerName,
+    tone: "review",
+    cta: "Freigabe anfordern",
+  };
+}
+
+function detailForCase(store, priority) {
+  const detail = store.caseDetails?.find((entry) => entry.caseId === priority.id);
+
+  if (detail) {
+    const entities = detail.entities?.length ? detail.entities : fallbackEntities(priority);
+    const draft = detail.outreachDraft || fallbackOutreachDraft(priority, entities);
+    const detailPayload = {
+      summary: detail.summary,
+      openDecision: detail.openDecision,
+      riskFlags: detail.riskFlags || priority.riskFlags,
+      nextActions: detail.nextActions || [],
+      entities,
+      roleBrief: detail.roleBrief || fallbackRoleBrief(priority),
+      flow: detail.flow || fallbackFlow(),
+      outreachDraft: draft,
+    };
+
+    return {
+      ...detailPayload,
+      recommendedAction: recommendedActionForCase(store, priority, detailPayload),
+    };
+  }
+
+  if (store.focusCase?.id === priority.id) {
+    const entities = store.focusCase.entities || fallbackEntities(priority);
+    const detailPayload = {
+      summary: store.focusCase.summary,
+      openDecision: store.focusCase.openDecision,
+      riskFlags: store.focusCase.riskFlags || priority.riskFlags,
+      nextActions: store.focusCase.nextActions || [],
+      entities,
+      roleBrief: fallbackRoleBrief(priority),
+      flow: fallbackFlow(),
+      outreachDraft: fallbackOutreachDraft(priority, entities),
+    };
+
+    return {
+      ...detailPayload,
+      recommendedAction: recommendedActionForCase(store, priority, detailPayload),
+    };
+  }
+
+  const entities = fallbackEntities(priority);
+  const detailPayload = {
     summary: `${priority.title} befindet sich im Candidate Flow und wartet auf die nächste priorisierte operative Entscheidung.`,
     openDecision: "Role Brief validieren und Discovery für die erste Kandidatenwelle starten.",
     riskFlags: priority.riskFlags,
@@ -128,9 +210,15 @@ function detailForCase(store, priority) {
       "Shortlist priorisieren",
       "Outreach-Winkel abstimmen",
     ],
-    entities: fallbackEntities(priority),
+    entities,
     roleBrief: fallbackRoleBrief(priority),
     flow: fallbackFlow(),
+    outreachDraft: fallbackOutreachDraft(priority, entities),
+  };
+
+  return {
+    ...detailPayload,
+    recommendedAction: recommendedActionForCase(store, priority, detailPayload),
   };
 }
 

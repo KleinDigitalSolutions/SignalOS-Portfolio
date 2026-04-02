@@ -152,6 +152,43 @@ viewRoot.addEventListener("click", async (event) => {
     return;
   }
 
+  const approvalRequest = event.target.closest("[data-request-outreach-approval]");
+  if (approvalRequest) {
+    const caseId = approvalRequest.dataset.requestOutreachApproval;
+    approvalRequest.disabled = true;
+    setNotice(null, "");
+
+    try {
+      const response = await fetch(`/api/cases/${caseId}/outreach/request-approval`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          actor: "Portfolio Operator",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Freigabe konnte nicht angefordert werden (${response.status})`);
+      }
+
+      const payload = await response.json();
+      appState = payload.state;
+      uiState.selectedCaseId = caseId;
+      uiState.selectedApprovalId = payload.approvalId;
+      setNotice("success", "Outreach-Freigabe angefordert.");
+      render();
+    } catch (error) {
+      setNotice("error", error.message || "Freigabe konnte nicht angefordert werden");
+      render();
+    } finally {
+      approvalRequest.disabled = false;
+    }
+    return;
+  }
+
   const button = event.target.closest("[data-approval-action]");
   if (!button) {
     return;
@@ -239,6 +276,43 @@ viewRoot.addEventListener("submit", async (event) => {
       appState = payload.state;
       uiState.selectedCaseId = payload.caseId;
       setNotice("success", "Neuer Candidate-Flow-Fall angelegt.");
+      render();
+      return;
+    }
+
+    if (form.matches("[data-outreach-form]")) {
+      const formData = new FormData(form);
+      const caseId = form.dataset.outreachForm;
+      const response = await fetch(`/api/cases/${caseId}/outreach`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          targetEntityId: formData.get("targetEntityId"),
+          targetEntityLabel: formData.get("targetEntityLabel"),
+          channel: formData.get("channel"),
+          tone: formData.get("tone"),
+          subject: formData.get("subject"),
+          opening: formData.get("opening"),
+          body: formData.get("body"),
+          rationale: formData.get("rationale"),
+          approvalOwner: formData.get("approvalOwner"),
+          approvalDue: formData.get("approvalDue"),
+          approvalRisk: formData.get("approvalRisk"),
+          actor: "Portfolio Operator",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Outreach-Draft konnte nicht gespeichert werden (${response.status})`);
+      }
+
+      const payload = await response.json();
+      appState = payload.state;
+      uiState.selectedCaseId = caseId;
+      setNotice("success", "Outreach-Draft gespeichert.");
       render();
       return;
     }

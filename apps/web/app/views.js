@@ -150,6 +150,26 @@ function renderFlowStages(flow) {
   `;
 }
 
+function renderRecommendedAction(action) {
+  if (!action) {
+    return `<article class="detail-card"><p class="copy">Keine empfohlene Aktion verfügbar.</p></article>`;
+  }
+
+  return `
+    <article class="detail-card recommendation-card" data-tone="${escapeHtml(action.tone)}">
+      <div class="panel-head panel-head-tight">
+        <div>
+          <p class="panel-label">Empfohlene nächste Aktion</p>
+          <h3>${escapeHtml(action.title)}</h3>
+        </div>
+        <span class="${chipClass(action.tone)}">${escapeHtml(action.cta)}</span>
+      </div>
+      <p class="copy">${escapeHtml(action.summary)}</p>
+      <p class="copy">Owner: ${escapeHtml(action.owner)}</p>
+    </article>
+  `;
+}
+
 function pendingApprovals(appData) {
   return appData.approvals.filter((approval) => approval.status === "pending");
 }
@@ -295,6 +315,9 @@ export const views = {
                   ${appData.focusCase.nextActions.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}
                 </ul>
               </article>
+            </div>
+            <div class="detail-stack">
+              ${renderRecommendedAction(appData.focusCase.recommendedAction)}
             </div>
           </section>
 
@@ -521,6 +544,123 @@ export const views = {
                   ${renderFlowStages(activeCaseDetails.flow)}
                 `
                 : `<p class="copy">Wähle einen Fall aus oder lege einen neuen Role Brief an, um den Candidate Flow zu sehen.</p>`
+            }
+          </section>
+
+          <section class="panel span-7">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Outreach Draft</p>
+                <h3>${activeCase ? `Ansprache für ${escapeHtml(activeCase.title)}` : "Kein Fall ausgewählt"}</h3>
+              </div>
+              ${
+                activeCaseDetails?.outreachDraft
+                  ? `<div class="pill-row">
+                      <span class="pill pill-neutral">${escapeHtml(activeCaseDetails.outreachDraft.channel)}</span>
+                      <span class="${chipClass(
+                        activeCaseDetails.outreachDraft.status === "approved"
+                          ? "live"
+                          : activeCaseDetails.outreachDraft.status === "needs_revision"
+                            ? "risk"
+                            : activeCaseDetails.outreachDraft.status === "pending_approval"
+                              ? "review"
+                              : "neutral",
+                      )}">${escapeHtml(activeCaseDetails.outreachDraft.status)}</span>
+                    </div>`
+                  : ""
+              }
+            </div>
+            ${
+              activeCase && activeCaseDetails?.outreachDraft
+                ? `
+                  <form class="editor-form" data-outreach-form="${escapeHtml(activeCase.id)}">
+                    <div class="form-grid">
+                      <input name="targetEntityId" type="hidden" value="${escapeHtml(activeCaseDetails.outreachDraft.targetEntityId || "")}" />
+                      <label class="field">
+                        <span>Zielprofil</span>
+                        <input name="targetEntityLabel" type="text" value="${escapeHtml(activeCaseDetails.outreachDraft.targetEntityLabel)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Kanal</span>
+                        <input name="channel" type="text" value="${escapeHtml(activeCaseDetails.outreachDraft.channel)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Tonalität</span>
+                        <input name="tone" type="text" value="${escapeHtml(activeCaseDetails.outreachDraft.tone)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Approval Owner</span>
+                        <input name="approvalOwner" type="text" value="${escapeHtml(activeCaseDetails.outreachDraft.approvalOwner)}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Betreff</span>
+                        <input name="subject" type="text" value="${escapeHtml(activeCaseDetails.outreachDraft.subject)}" required />
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Opening</span>
+                        <textarea name="opening" rows="3" required>${escapeHtml(activeCaseDetails.outreachDraft.opening)}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Nachricht</span>
+                        <textarea name="body" rows="6" required>${escapeHtml(activeCaseDetails.outreachDraft.body)}</textarea>
+                      </label>
+                      <label class="field field-span-2">
+                        <span>Rationale</span>
+                        <textarea name="rationale" rows="4" required>${escapeHtml(activeCaseDetails.outreachDraft.rationale)}</textarea>
+                      </label>
+                      <label class="field">
+                        <span>Fällig für Approval</span>
+                        <input name="approvalDue" type="text" value="${escapeHtml(activeCaseDetails.outreachDraft.approvalDue)}" required />
+                      </label>
+                      <label class="field">
+                        <span>Approval-Risiko</span>
+                        <select name="approvalRisk">
+                          ${renderSelectOptions(APPROVAL_RISK_OPTIONS, activeCaseDetails.outreachDraft.approvalRisk)}
+                        </select>
+                      </label>
+                    </div>
+                    <p class="panel-subcopy">
+                      Der Draft wird direkt am Fall gespeichert. Eine Freigabe erzeugt anschließend einen echten Approval-Eintrag mit Audit- und Event-Spur.
+                    </p>
+                    <div class="button-row">
+                      <button class="inline-button" type="submit">Draft speichern</button>
+                      <button
+                        class="inline-button"
+                        type="button"
+                        data-request-outreach-approval="${escapeHtml(activeCase.id)}"
+                        ${activeCaseDetails.outreachDraft.status === "pending_approval" ? "disabled" : ""}
+                      >
+                        ${activeCaseDetails.outreachDraft.status === "pending_approval" ? "Freigabe offen" : "Freigabe anfordern"}
+                      </button>
+                    </div>
+                  </form>
+                `
+                : `<p class="copy">Für den ausgewählten Fall ist noch kein Outreach-Draft verfügbar.</p>`
+            }
+          </section>
+
+          <section class="panel span-5">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Next Action</p>
+                <h3>Was jetzt operativ den größten Hebel hat</h3>
+              </div>
+            </div>
+            ${renderRecommendedAction(activeCaseDetails?.recommendedAction)}
+            ${
+              activeCaseDetails?.outreachDraft
+                ? `
+                  <article class="detail-card">
+                    <p class="detail-label">Draft-Kontext</p>
+                    <ul class="detail-list">
+                      <li>Zielprofil: ${escapeHtml(activeCaseDetails.outreachDraft.targetEntityLabel)}</li>
+                      <li>Status: ${escapeHtml(activeCaseDetails.outreachDraft.status)}</li>
+                      <li>Freigabe-Owner: ${escapeHtml(activeCaseDetails.outreachDraft.approvalOwner)}</li>
+                      <li>Fällig: ${escapeHtml(activeCaseDetails.outreachDraft.approvalDue)}</li>
+                    </ul>
+                  </article>
+                `
+                : ""
             }
           </section>
 

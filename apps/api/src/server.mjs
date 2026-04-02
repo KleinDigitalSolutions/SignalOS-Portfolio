@@ -216,9 +216,58 @@ function appendApprovalDecision(store, approval, decision, actor) {
 
   const relatedPriority = store.priorities.find((priority) => priority.id === approval.caseId);
   if (relatedPriority) {
+    const detail = ensureCaseDetail(store, approval.caseId, relatedPriority);
     relatedPriority.updatedAt = approval.decidedAt;
     if (decision === "approved") {
       relatedPriority.riskFlags = relatedPriority.riskFlags.filter((flag) => flag !== "SLA droht zu reißen");
+    }
+
+    if (
+      approval.kind === "outreach" &&
+      detail.outreachDraft &&
+      (detail.outreachDraft.approvalId === approval.id || detail.outreachDraft.id === approval.draftId)
+    ) {
+      detail.outreachDraft.status = decision === "approved" ? "approved" : "needs_revision";
+      detail.outreachDraft.lastUpdatedAt = approval.decidedAt;
+
+      if (decision === "approved") {
+        detail.openDecision = "Outreach über den gewählten Kanal auslösen und Reply-Signale monitoren.";
+        detail.nextActions = [
+          "Outreach versenden",
+          "Reply-Tracking aktivieren",
+          "Screening-Signale nach erster Antwort aktualisieren",
+        ];
+        detail.riskFlags = removeFlag(detail.riskFlags, "Outreach wartet auf Freigabe");
+        detail.riskFlags = removeFlag(detail.riskFlags, "Outreach-Draft überarbeiten");
+        relatedPriority.riskFlags = removeFlag(relatedPriority.riskFlags, "Outreach wartet auf Freigabe");
+        relatedPriority.riskFlags = removeFlag(relatedPriority.riskFlags, "Outreach-Draft überarbeiten");
+        updateFlowStage(detail.flow, "outreach", "active", "Outreach ist freigegeben und bereit für die Ausführung.");
+        updateFlowStage(detail.flow, "screening", "pending", "Reply-Klassifizierung startet nach dem Versand.");
+      } else {
+        detail.openDecision = "Outreach-Draft überarbeiten und erneut zur Freigabe vorlegen.";
+        detail.nextActions = [
+          "Feedback aus Ablehnung einarbeiten",
+          "Rationale oder Tonalität schärfen",
+          "Neue Freigabe anfordern",
+        ];
+        detail.riskFlags = removeFlag(detail.riskFlags, "Outreach wartet auf Freigabe");
+        detail.riskFlags = ensureFlag(detail.riskFlags, "Outreach-Draft überarbeiten");
+        relatedPriority.riskFlags = removeFlag(relatedPriority.riskFlags, "Outreach wartet auf Freigabe");
+        relatedPriority.riskFlags = ensureFlag(relatedPriority.riskFlags, "Outreach-Draft überarbeiten");
+        updateFlowStage(detail.flow, "outreach", "active", "Outreach wurde gestoppt und wartet auf einen überarbeiteten Draft.");
+      }
+
+      const pendingApprovalsForCase = store.approvals.filter(
+        (item) => item.caseId === approval.caseId && item.status === "pending",
+      ).length;
+
+      relatedPriority.status =
+        pendingApprovalsForCase > 0
+          ? "approval_required"
+          : decision === "approved"
+            ? "coordination_ready"
+            : "evaluation_pending";
+      relatedPriority.statusLabel = CASE_STATUS_LABELS[relatedPriority.status];
     }
   }
 }
@@ -232,19 +281,33 @@ function syncFocusCase(store, priority) {
   store.focusCase.domainLabel = priority.domainLabel;
 }
 
+function ensureFlag(list, flag) {
+  if (!Array.isArray(list)) {
+    return [flag];
+  }
+
+  return list.includes(flag) ? list : [...list, flag];
+}
+
+function removeFlag(list, flag) {
+  return Array.isArray(list) ? list.filter((entry) => entry !== flag) : [];
+}
+
 function ensureCaseDetailsStore(store) {
   if (!Array.isArray(store.caseDetails)) {
     store.caseDetails = [];
   }
 
   if (store.focusCase?.id && !store.caseDetails.some((entry) => entry.caseId === store.focusCase.id)) {
+    const entities = Array.isArray(store.focusCase.entities) ? [...store.focusCase.entities] : [];
+
     store.caseDetails.push({
       caseId: store.focusCase.id,
       summary: store.focusCase.summary,
       openDecision: store.focusCase.openDecision,
       riskFlags: Array.isArray(store.focusCase.riskFlags) ? [...store.focusCase.riskFlags] : [],
       nextActions: Array.isArray(store.focusCase.nextActions) ? [...store.focusCase.nextActions] : [],
-      entities: Array.isArray(store.focusCase.entities) ? [...store.focusCase.entities] : [],
+      entities,
       roleBrief: {
         mission: store.focusCase.summary,
         mustHaves: ["Agentic Delivery", "Workflow-Orchestrierung", "Stakeholder-Kommunikation"],
@@ -255,6 +318,7 @@ function ensureCaseDetailsStore(store) {
         outreachAngle: "Strategische Rolle mit hoher Sichtbarkeit und unmittelbarem Hebel auf operative Qualität.",
       },
       flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
+      outreachDraft: buildDefaultOutreachDraft(store.focusCase.title, entities[0]),
     });
   }
 
@@ -296,11 +360,51 @@ function fallbackEntities(title) {
   ];
 }
 
+function buildDefaultOutreachDraft(title, entity) {
+  const targetLabel = entity?.displayName || "priorisiertes Profil";
+
+  return {
+    id: createId("outreach"),
+    targetEntityId: entity?.id || null,
+    targetEntityLabel: targetLabel,
+    channel: "email",
+    tone: "präzise und persönlich",
+    subject: `${title}: kurzer Austausch zu einer AI-First-Rolle?`,
+    opening: `Hallo ${targetLabel},`,
+    body: `dein Profil passt auffallend gut zu einer Rolle, in der agentische Workflows, operative Ownership und sichtbarer Hebel auf Recruiting-Prozesse zusammenkommen.`,
+    rationale: "Hoher System Fit, klare Delivery-Signale und relevante Nähe zu den priorisierten Must-haves.",
+    status: "draft",
+    approvalOwner: "Hiring Lead",
+    approvalDue: "heute, 16:00 Uhr",
+    approvalRisk: "warning",
+    approvalId: null,
+    lastUpdatedAt: nowTimestamp(),
+  };
+}
+
+function updateFlowStage(flow, stageId, status, summary) {
+  if (!Array.isArray(flow)) {
+    return;
+  }
+
+  const stage = flow.find((entry) => entry.id === stageId);
+  if (!stage) {
+    return;
+  }
+
+  stage.status = status;
+  if (summary) {
+    stage.summary = summary;
+  }
+}
+
 function ensureCaseDetail(store, caseId, priority) {
   const caseDetails = ensureCaseDetailsStore(store);
   let detail = caseDetails.find((entry) => entry.caseId === caseId);
 
   if (!detail) {
+    const entities = fallbackEntities(priority.title);
+
     detail = {
       caseId,
       summary: `${priority.title} befindet sich im operativen Review und wird entlang des Candidate Flows priorisiert.`,
@@ -311,7 +415,7 @@ function ensureCaseDetail(store, caseId, priority) {
         "Discovery-Shortlist priorisieren",
         "Outreach-Winkel für erste Kontakte definieren",
       ],
-      entities: fallbackEntities(priority.title),
+      entities,
       roleBrief: {
         mission: `${priority.title} als priorisierte Rolle im ${priority.domainLabel} sauber strukturieren und in den Flow überführen.`,
         mustHaves: ["Domänenrelevanz", "Nachweisbare Delivery", "Kommunikationsstärke"],
@@ -322,8 +426,33 @@ function ensureCaseDetail(store, caseId, priority) {
         outreachAngle: "Hoher Hebel auf Prozessqualität und Geschwindigkeit.",
       },
       flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
+      outreachDraft: buildDefaultOutreachDraft(priority.title, entities[0]),
     };
     caseDetails.push(detail);
+  }
+
+  if (!Array.isArray(detail.entities) || detail.entities.length === 0) {
+    detail.entities = fallbackEntities(priority.title);
+  }
+
+  if (!detail.roleBrief) {
+    detail.roleBrief = {
+      mission: `${priority.title} als priorisierte Rolle im ${priority.domainLabel} sauber strukturieren und in den Flow überführen.`,
+      mustHaves: ["Domänenrelevanz", "Nachweisbare Delivery", "Kommunikationsstärke"],
+      niceToHaves: ["AI-First Arbeitsweise", "Stakeholder-Erfahrung"],
+      location: "Remote / Hybrid",
+      urgency: "mittel",
+      targetStart: "in Abstimmung",
+      outreachAngle: "Hoher Hebel auf Prozessqualität und Geschwindigkeit.",
+    };
+  }
+
+  if (!Array.isArray(detail.flow) || detail.flow.length === 0) {
+    detail.flow = DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage }));
+  }
+
+  if (!detail.outreachDraft) {
+    detail.outreachDraft = buildDefaultOutreachDraft(priority.title, detail.entities[0]);
   }
 
   return detail;
@@ -337,6 +466,7 @@ function buildCaseDetail(payload, priority) {
   const urgency = requireNonEmptyString(payload.urgency, "urgency");
   const targetStart = requireNonEmptyString(payload.targetStart, "targetStart");
   const outreachAngle = requireNonEmptyString(payload.outreachAngle, "outreachAngle");
+  const entities = fallbackEntities(priority.title);
 
   return {
     caseId: priority.id,
@@ -348,7 +478,7 @@ function buildCaseDetail(payload, priority) {
       "Enrichment-Signale für die ersten Profile prüfen",
       "Outreach-Winkel vor Versand abstimmen",
     ],
-    entities: fallbackEntities(priority.title),
+    entities,
     roleBrief: {
       mission,
       mustHaves,
@@ -359,6 +489,7 @@ function buildCaseDetail(payload, priority) {
       outreachAngle,
     },
     flow: DEFAULT_FLOW_STAGES.map((stage) => ({ ...stage })),
+    outreachDraft: buildDefaultOutreachDraft(priority.title, entities[0]),
   };
 }
 
@@ -402,6 +533,28 @@ function appendCreateEvent(store, title, summary, actor, target) {
     actor,
     target,
     result: "Case angelegt",
+    timestamp,
+  });
+}
+
+function appendOutreachApprovalRequested(store, approval, actor) {
+  const timestamp = nowTimestamp();
+
+  store.events.unshift({
+    id: createId("event"),
+    severity: approval.risk === "risk" ? "warning" : "info",
+    eventName: "approval.required",
+    title: `Freigabe für Outreach-Draft angefordert`,
+    summary: `${actor} hat für "${approval.title}" eine menschliche Freigabe angefordert.`,
+    meta: `${timestamp} · ${actor}`,
+  });
+
+  store.audit.unshift({
+    id: createId("audit"),
+    action: "approval.required",
+    actor,
+    target: approval.title,
+    result: "Outreach-Freigabe angelegt",
     timestamp,
   });
 }
@@ -454,6 +607,151 @@ function createCase(store, payload) {
   );
 
   return priority;
+}
+
+function updateOutreachDraft(store, caseId, payload) {
+  const priority = store.priorities.find((item) => item.id === caseId);
+  if (!priority) {
+    return null;
+  }
+
+  const detail = ensureCaseDetail(store, caseId, priority);
+  const draft = detail.outreachDraft;
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+  const changedFields = [];
+
+  const nextValues = {
+    targetEntityLabel: requireNonEmptyString(payload.targetEntityLabel, "targetEntityLabel"),
+    channel: requireNonEmptyString(payload.channel, "channel"),
+    tone: requireNonEmptyString(payload.tone, "tone"),
+    subject: requireNonEmptyString(payload.subject, "subject"),
+    opening: requireNonEmptyString(payload.opening, "opening"),
+    body: requireNonEmptyString(payload.body, "body"),
+    rationale: requireNonEmptyString(payload.rationale, "rationale"),
+    approvalOwner: requireNonEmptyString(payload.approvalOwner, "approvalOwner"),
+    approvalDue: requireNonEmptyString(payload.approvalDue, "approvalDue"),
+    approvalRisk: requireEnum(payload.approvalRisk, APPROVAL_RISK_VALUES, "approvalRisk"),
+  };
+
+  const assign = (field, nextValue) => {
+    const previous = JSON.stringify(draft[field]);
+    const next = JSON.stringify(nextValue);
+    if (previous !== next) {
+      draft[field] = nextValue;
+      changedFields.push(field);
+    }
+  };
+
+  if ("targetEntityId" in payload) {
+    assign("targetEntityId", cleanString(payload.targetEntityId) || null);
+  }
+
+  Object.entries(nextValues).forEach(([field, value]) => {
+    assign(field, value);
+  });
+
+  if (changedFields.length > 0) {
+    draft.lastUpdatedAt = nowTimestamp();
+
+    if (draft.status !== "pending_approval") {
+      draft.status = "draft";
+      draft.approvalId = null;
+    }
+
+    detail.openDecision =
+      draft.status === "pending_approval"
+        ? "Freigabe für Outreach-Draft prüfen oder bei Risiko ablehnen."
+        : "Outreach-Draft finalisieren und anschließend zur Freigabe vorlegen.";
+    detail.nextActions =
+      draft.status === "pending_approval"
+        ? ["Freigabe priorisieren", "Sensible Außenwirkung prüfen", "Nach Entscheidung Flow fortsetzen"]
+        : ["Draft sprachlich prüfen", "Kanal und Timing abstimmen", "Freigabe anfordern"];
+
+    updateFlowStage(
+      detail.flow,
+      "outreach",
+      draft.status === "pending_approval" ? "active" : "pending",
+      draft.status === "pending_approval"
+        ? "Outreach-Draft liegt zur menschlichen Freigabe vor."
+        : "Outreach-Winkel und Ansprache werden für die erste Welle vorbereitet.",
+    );
+
+    priority.updatedAt = draft.lastUpdatedAt;
+    appendUpdateEvent(
+      store,
+      "outreach",
+      `Outreach-Draft aktualisiert: ${priority.title}`,
+      `${actor} hat ${changedFields.join(", ")} für den Outreach-Draft von "${priority.title}" aktualisiert.`,
+      actor,
+      priority.title,
+    );
+  }
+
+  return draft;
+}
+
+function requestOutreachApproval(store, caseId, payload) {
+  const priority = store.priorities.find((item) => item.id === caseId);
+  if (!priority) {
+    return null;
+  }
+
+  const detail = ensureCaseDetail(store, caseId, priority);
+  const draft = detail.outreachDraft;
+  const actor = cleanString(payload.actor) || "Portfolio Operator";
+
+  if (!cleanString(draft.subject) || !cleanString(draft.opening) || !cleanString(draft.body) || !cleanString(draft.rationale)) {
+    const error = new Error("outreachDraft");
+    error.code = "invalid_field";
+    throw error;
+  }
+
+  const existingPending = draft.approvalId
+    ? store.approvals.find((item) => item.id === draft.approvalId && item.status === "pending")
+    : null;
+
+  if (existingPending) {
+    const error = new Error("approval_pending");
+    error.code = "approval_pending";
+    throw error;
+  }
+
+  const approval = {
+    id: createId("approval"),
+    caseId: priority.id,
+    title: `Outreach an ${draft.targetEntityLabel}`,
+    owner: draft.approvalOwner || priority.ownerName,
+    reason: `${draft.rationale} Kanal: ${draft.channel}.`,
+    due: draft.approvalDue || "heute, 16:00 Uhr",
+    risk: APPROVAL_RISK_VALUES.has(draft.approvalRisk) ? draft.approvalRisk : "warning",
+    status: "pending",
+    kind: "outreach",
+    draftId: draft.id,
+  };
+
+  store.approvals.unshift(approval);
+  draft.status = "pending_approval";
+  draft.approvalId = approval.id;
+  draft.lastUpdatedAt = nowTimestamp();
+  detail.openDecision = "Freigabe für Outreach-Draft prüfen oder bei Risiko ablehnen.";
+  detail.nextActions = [
+    "Freigabe im Audit-Board priorisieren",
+    "Sensible Außenwirkung prüfen",
+    "Nach Freigabe Versand und Reply-Tracking auslösen",
+  ];
+  detail.riskFlags = removeFlag(detail.riskFlags, "Outreach-Draft überarbeiten");
+  detail.riskFlags = ensureFlag(detail.riskFlags, "Outreach wartet auf Freigabe");
+  priority.riskFlags = removeFlag(priority.riskFlags, "Outreach-Draft überarbeiten");
+  priority.riskFlags = ensureFlag(priority.riskFlags, "Outreach wartet auf Freigabe");
+  priority.status = "approval_required";
+  priority.statusLabel = CASE_STATUS_LABELS.approval_required;
+  priority.updatedAt = draft.lastUpdatedAt;
+
+  updateFlowStage(detail.flow, "discovery", "done", "Discovery-Shortlist wurde priorisiert und an Outreach übergeben.");
+  updateFlowStage(detail.flow, "outreach", "active", "Outreach-Draft liegt zur menschlichen Freigabe vor.");
+
+  appendOutreachApprovalRequested(store, approval, actor);
+  return approval;
 }
 
 function updateCase(store, caseId, payload) {
@@ -657,6 +955,44 @@ async function handleApi(request, response, pathname) {
     return;
   }
 
+  const outreachApprovalMatch = pathname.match(/^\/api\/cases\/([^/]+)\/outreach\/request-approval$/);
+  if (method === "POST" && outreachApprovalMatch) {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const approval = requestOutreachApproval(store, outreachApprovalMatch[1], payload);
+      if (!approval) {
+        sendJson(response, 404, {
+          error: "case_not_found",
+        });
+        return;
+      }
+
+      await writeStore(store);
+      sendJson(response, 201, {
+        ok: true,
+        approvalId: approval.id,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      const statusCode =
+        error.code === "invalid_field" ? 400 : error.code === "approval_pending" ? 409 : 500;
+      sendJson(response, statusCode, {
+        error: error.code || "approval_request_failed",
+        field: error.message,
+      });
+    }
+    return;
+  }
+
   const approvalMatch = pathname.match(/^\/api\/approvals\/([^/]+)\/decision$/);
   if (method === "POST" && approvalMatch) {
     let payload;
@@ -734,6 +1070,41 @@ async function handleApi(request, response, pathname) {
     } catch (error) {
       sendJson(response, error.code === "invalid_field" ? 400 : 500, {
         error: error.code || "update_failed",
+        field: error.message,
+      });
+    }
+    return;
+  }
+
+  const outreachMatch = pathname.match(/^\/api\/cases\/([^/]+)\/outreach$/);
+  if (method === "PATCH" && outreachMatch) {
+    let payload;
+    try {
+      payload = await readRequestBody(request);
+    } catch (error) {
+      sendJson(response, error.message === "payload_too_large" ? 413 : 400, {
+        error: error.message,
+      });
+      return;
+    }
+
+    try {
+      const updatedDraft = updateOutreachDraft(store, outreachMatch[1], payload);
+      if (!updatedDraft) {
+        sendJson(response, 404, {
+          error: "case_not_found",
+        });
+        return;
+      }
+
+      await writeStore(store);
+      sendJson(response, 200, {
+        ok: true,
+        state: deriveState(store),
+      });
+    } catch (error) {
+      sendJson(response, error.code === "invalid_field" ? 400 : 500, {
+        error: error.code || "outreach_update_failed",
         field: error.message,
       });
     }

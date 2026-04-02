@@ -649,6 +649,12 @@ a {
   padding: 18px;
 }
 
+.detail-stack,
+.button-row {
+  display: grid;
+  gap: 14px;
+}
+
 .editor-form,
 .form-grid {
   display: grid;
@@ -703,6 +709,23 @@ a {
   margin: 0 0 16px;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.recommendation-card {
+  border: 1px solid rgba(179, 226, 230, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.recommendation-card[data-tone="live"] {
+  border-color: rgba(118, 211, 168, 0.26);
+}
+
+.recommendation-card[data-tone="review"] {
+  border-color: rgba(255, 199, 95, 0.24);
+}
+
+.recommendation-card[data-tone="risk"] {
+  border-color: rgba(255, 132, 117, 0.26);
 }
 
 .flow-stage-list {
